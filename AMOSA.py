@@ -62,6 +62,7 @@ class AMOSA:
         self.__current_temperature = self.initial_temperature
         x = random.choice(self.archive)
         while self.__current_temperature > self.final_temperature:
+            self.__print_statistics(problem)
             for i in range(self.refinement_iterations):
                 y = random_perturbation(problem, x)
                 fitness_range = self.__compute_fitness_range(x, y)
@@ -95,13 +96,12 @@ class AMOSA:
                         x = y
                 else:
                     raise RuntimeError(f"Something went wrong\narchive: {self.archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-            #self.plot_pareto(problem, "pareto_front.pdf")
             self.n_eval += self.refinement_iterations
-            self.__print_statistics(problem)
             self.__current_temperature *= self.cooling_factor
         if len(self.archive) > self.archive_hard_limit:
             self.__archive_clustering()
         self.__remove_infeasible(problem)
+        self.__print_statistics(problem)
 
     def pareto_front(self):
         return np.array([s["f"] for s in self.archive])
@@ -180,9 +180,11 @@ class AMOSA:
 
     def __print_header(self, problem):
         if problem.num_of_constraints == 0:
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6))
             print("  | {:>12} | {:>10} | {:>6} |".format("Temperature", "NEVAL", "NDS"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+".format("-"*12, "-"*10, "-" * 6))
         else:
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10))
             print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} |".format("Temperature", "EVAL", "NDS", "CV min", "CV avg"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10))
 
@@ -275,7 +277,12 @@ def not_the_same(x, y):
     return x["x"] != y["x"]
 
 def dominates(x, y):
-    return all([ i <= j for i, j in zip(x["f"], y["f"]) ]) and any([ i < j for i, j in zip(x["f"], y["f"]) ])
+    if x["g"] is None:
+        return all( i <= j for i, j in zip(x["f"], y["f"]) ) and any( i < j for i, j in zip(x["f"], y["f"]) )
+    else:
+        return  ((all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])) or # x is feasible while y is not
+                 (any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([ i <= j for i, j in zip(x["g"], y["g"]) ]) and any([ i < j for i, j in zip(x["g"], y["g"]) ])) or #x and y are both infeasible, but x has a lower constraint violation
+                 (all(i <= 0 for i in x["f"]) and all(i <= 0 for i in y["f"]) and all([ i <= j for i, j in zip(x["f"], y["f"]) ]) and any([ i < j for i, j in zip(x["f"], y["f"]) ]))) # both are feasible, but x dominates y in the usual sense
 
 def accept(probability):
     return random.random() < probability
