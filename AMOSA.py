@@ -46,29 +46,35 @@ class AMOSA:
         self.refinement_iterations = 2500
         self.initial_temperature = 1500
         self.final_temperature = 0.00001
-        self.__current_temperature = self.final_temperature
         self.cooling_factor = 0.9
-        self.archive = []
-        self.n_eval = 0
+        self.__current_temperature = 0
+        self.__archive = []
+        self.__n_eval = 0
+        self.__ideal = None
+        self.__nadir = None
+        self.__old_f = []
 
     def minimize(self, problem):
         self.__parameters_check()
-        self.archive = []
+        self.__archive = []
+        self.__old_f = None
+        self.__ideal = None
+        self.__nadir = None
         self.__initialize_archive(problem)
-        if len(self.archive) > self.archive_hard_limit:
+        if len(self.__archive) > self.archive_hard_limit:
             self.__archive_clustering()
-        self.n_eval = self.archive_gamma * self.archive_soft_limit * self.initial_refinement_iterations
+        self.__n_eval = self.archive_gamma * self.archive_soft_limit * self.initial_refinement_iterations
         self.__print_header(problem)
         self.__current_temperature = self.initial_temperature
-        x = random.choice(self.archive)
+        x = random.choice(self.__archive)
         while self.__current_temperature > self.final_temperature:
             self.__print_statistics(problem)
             for i in range(self.refinement_iterations):
                 y = random_perturbation(problem, x)
                 fitness_range = self.__compute_fitness_range(x, y)
-                s_dominating_y = [ s for s in self.archive if dominates(s, y) ]
+                s_dominating_y = [s for s in self.__archive if dominates(s, y)]
                 k_s_dominating_y = len(s_dominating_y)
-                s_dominated_by_y = [ s for s in self.archive if dominates(y, s) ]
+                s_dominated_by_y = [s for s in self.__archive if dominates(y, s)]
                 k_s_dominated_by_y = len(s_dominated_by_y)
                 if dominates(x, y) and k_s_dominating_y >= 0:
                     delta_avg = (sum([domination_amount(s, y, fitness_range) for s in s_dominating_y]) + domination_amount(x, y, fitness_range)) / (k_s_dominating_y + 1)
@@ -81,36 +87,36 @@ class AMOSA:
                             x = y
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
-                        if len(self.archive) > self.archive_soft_limit:
+                        if len(self.__archive) > self.archive_soft_limit:
                             self.__archive_clustering()
                         x = y
                 elif dominates(y, x):
                     if k_s_dominating_y >= 1:
                         delta_dom = [domination_amount(s, y, fitness_range) for s in s_dominating_y]
                         if accept(sigmoid(min(delta_dom))):
-                            x = self.archive[np.argmin(delta_dom)]
+                            x = self.__archive[np.argmin(delta_dom)]
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
-                        if len(self.archive) > self.archive_soft_limit:
+                        if len(self.__archive) > self.archive_soft_limit:
                             self.__archive_clustering()
                         x = y
                 else:
-                    raise RuntimeError(f"Something went wrong\narchive: {self.archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-            self.n_eval += self.refinement_iterations
+                    raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
+            self.__n_eval += self.refinement_iterations
             self.__current_temperature *= self.cooling_factor
-        if len(self.archive) > self.archive_hard_limit:
+        if len(self.__archive) > self.archive_hard_limit:
             self.__archive_clustering()
         self.__remove_infeasible(problem)
         self.__print_statistics(problem)
 
     def pareto_front(self):
-        return np.array([s["f"] for s in self.archive])
+        return np.array([s["f"] for s in self.__archive])
 
     def pareto_set(self):
-        return np.array([s["x"] for s in self.archive])
+        return np.array([s["x"] for s in self.__archive])
 
     def constraint_violation(self):
-        return np.array([s["g"] for s in self.archive])
+        return np.array([s["g"] for s in self.__archive])
 
     def plot_pareto(self, problem, pdf_file):
         if problem.num_of_objectives == 2:
@@ -121,15 +127,13 @@ class AMOSA:
             plt.ylabel("f1")
             plt.title("Pareto front")
             plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
-            #plt.show()
 
     def save_results(self, problem, csv_file):
         original_stdout = sys.stdout
         row_format = "{:};" * problem.num_of_objectives + "{:};" * problem.num_of_variables
         with open(csv_file, "w") as file:
             sys.stdout = file
-            print(row_format.format(*[f"f{i}" for i in range(problem.num_of_objectives)],
-                                    *[f"x{i}" for i in range(problem.num_of_variables)]))
+            print(row_format.format(*[f"f{i}" for i in range(problem.num_of_objectives)], *[f"x{i}" for i in range(problem.num_of_variables)]))
             for f, x in zip(self.pareto_front(), self.pareto_set()):
                 print(row_format.format(*f, *x))
         sys.stdout = original_stdout
@@ -158,46 +162,70 @@ class AMOSA:
             self.__add_to_archive(x)
 
     def __add_to_archive(self, x):
-        if len(self.archive) == 0:
-            self.archive.append(x)
+        if len(self.__archive) == 0:
+            self.__archive.append(x)
         else:
-            self.archive = [y for y in self.archive if not dominates(x, y)]
-            if not any([dominates(y, x) or is_the_same(x, y) for y in self.archive]):
-                self.archive.append(x)
+            self.__archive = [y for y in self.__archive if not dominates(x, y)]
+            if not any([dominates(y, x) or is_the_same(x, y) for y in self.__archive]):
+                self.__archive.append(x)
 
     def __archive_clustering(self):
-        while len(self.archive) > self.archive_hard_limit:
-            x = np.array([s["x"] for s in self.archive])
+        while len(self.__archive) > self.archive_hard_limit:
+            x = np.array([s["x"] for s in self.__archive])
             d = np.array([[np.linalg.norm(i - j) if not np.array_equal(i, j) else np.nan for j in x ] for i in x])
             i_min = np.nanargmin(d)
             r = int(i_min / len(x))
             c = i_min % len(x)
-            del self.archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
+            del self.__archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
 
     def __remove_infeasible(self, problem):
         if problem.num_of_constraints > 0:
-            self.archive = [s for s in self.archive if all([g <= 0 for g in s["g"]]) ]
+            self.__archive = [s for s in self.__archive if all([g <= 0 for g in s["g"]])]
 
     def __print_header(self, problem):
         if problem.num_of_constraints == 0:
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6))
-            print("  | {:>12} | {:>10} | {:>6} |".format("Temperature", "NEVAL", "NDS"))
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+".format("-"*12, "-"*10, "-" * 6))
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
+            print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("Temperature", "# eval", " # nds", "ideal", "nadir", "phi"))
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
         else:
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10))
-            print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} |".format("Temperature", "EVAL", "NDS", "CV min", "CV avg"))
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10))
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("Temperature", "# eval", "# nds", "cv min", "cv avg", "ideal", "nadir", "phi"))
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __print_statistics(self, problem):
+        delta_nad, delta_ideal, phy = self.__compute_deltas()
         if problem.num_of_constraints == 0:
-            print("  | {:>12.2e} | {:>10.2e} | {:>6} |".format(self.__current_temperature, self.n_eval,len(self.archive)))
+            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
         else:
-            g = np.array([s["g"] for s in self.archive])
-            g = g[np.where(g > 0)]
-            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.2e} | {:>10.2e} |".format(self.__current_temperature, self.n_eval, len(self.archive), 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)))
+            cv_min, cv_avg = self.__compute_cv()
+            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), cv_min, cv_avg, delta_ideal, delta_nad, phy))
+
+    def __compute_cv(self):
+        g = np.array([s["g"] for s in self.__archive])
+        g = g[np.where(g > 0)]
+        return 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
+
+    def __compute_deltas(self):
+        f = np.array([s["f"] for s in self.__archive])
+        if self.__nadir is None and self.__ideal is None and self.__old_f is None:
+            self.__nadir = np.max(f, axis=0)
+            self.__ideal = np.min(f, axis=0)
+            self.__old_f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir) ] for x in f[:] ])
+            return np.inf, np.inf, 0
+        else:
+            nadir = np.max(f, axis=0)
+            ideal = np.min(f, axis=0)
+            delta_nad = np.max([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
+            delta_ideal = np.max([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
+            f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir) ] for x in f[:] ])
+            phy = sum([np.min([np.linalg.norm(p - q) for q in f[:]]) for p in self.__old_f[:]]) / len(self.__old_f)
+            self.__nadir = nadir
+            self.__ideal = ideal
+            self.__old_f = f
+            return delta_nad, delta_ideal, phy
 
     def __compute_fitness_range(self, x, y):
-        f = [s["f"] for s in self.archive] + [x["f"], y["f"]]
+        f = [s["f"] for s in self.__archive] + [x["f"], y["f"]]
         return np.max(f, axis = 0) - np.min(f, axis=0)
 
 def hill_climbing(problem, x, max_iterations):
