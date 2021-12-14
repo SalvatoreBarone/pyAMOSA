@@ -36,14 +36,14 @@ class OSY(AMOSA.Problem):
 if __name__ == '__main__':
     problem = OSY()
     optimizer = AMOSA()
-    optimizer.archive_hard_limit = 250
+    optimizer.archive_hard_limit = 200
     optimizer.archive_soft_limit = 500
-    optimizer.initial_refinement_iterations = 500
-    optimizer.archive_gamma = 2
-    optimizer.refinement_iterations = 500
+    optimizer.initial_refinement_iterations = 100
+    optimizer.archive_gamma = 3
+    optimizer.refinement_iterations = 100
     optimizer.initial_temperature = 500
     optimizer.final_temperature = 0.0000001
-    optimizer.cooling_factor = 0.8
+    optimizer.cooling_factor = 0.9
     optimizer.minimize(problem)
     optimizer.save_results(problem, "osy.csv")
     optimizer.plot_pareto(problem, "osy.pdf")
