@@ -73,7 +73,7 @@ class AMOSA:
         self.duration = time.time()
         self.__initialize_archive(problem)
         if len(self.__archive) > self.archive_hard_limit:
-            self.__archive_clustering()
+            self.__archive_clustering(problem)
         self.__print_header(problem)
         self.__current_temperature = self.initial_temperature
         x = random.choice(self.__archive)
@@ -98,7 +98,7 @@ class AMOSA:
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
                         if len(self.__archive) > self.archive_soft_limit:
-                            self.__archive_clustering()
+                            self.__archive_clustering(problem)
                         x = y
                 elif dominates(y, x):
                     if k_s_dominating_y >= 1:
@@ -108,13 +108,13 @@ class AMOSA:
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
                         if len(self.__archive) > self.archive_soft_limit:
-                            self.__archive_clustering()
+                            self.__archive_clustering(problem)
                         x = y
                 else:
                     raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
             self.__current_temperature *= self.cooling_factor
         if len(self.__archive) > self.archive_hard_limit:
-            self.__archive_clustering()
+            self.__archive_clustering(problem)
         self.__remove_infeasible(problem)
         self.__print_statistics(problem)
         self.duration = time.time() - self.duration
@@ -181,14 +181,18 @@ class AMOSA:
             if not any([dominates(y, x) or is_the_same(x, y) for y in self.__archive]):
                 self.__archive.append(x)
 
-    def __archive_clustering(self):
-        while len(self.__archive) > self.archive_hard_limit:
-            x = np.array([s["x"] for s in self.__archive])
-            d = np.array([[np.linalg.norm(i - j) if not np.array_equal(i, j) else np.nan for j in x ] for i in x])
-            i_min = np.nanargmin(d)
-            r = int(i_min / len(x))
-            c = i_min % len(x)
-            del self.__archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
+    def __archive_clustering(self, problem):
+        if problem.num_of_constraints > 0:
+            feasible = [s for s in self.__archive if all([g <= 0 for g in s["g"]])]
+            non_feasible = [s for s in self.__archive if all([g > 0 for g in s["g"]])]
+            if len(feasible) > self.archive_hard_limit:
+                do_clustering(feasible, self.archive_hard_limit)
+                self.__archive = feasible
+            else:
+                do_clustering(non_feasible, self.archive_hard_limit - len(feasible))
+                self.__archive = non_feasible + feasible
+        else:
+            do_clustering(self.__archive, self.archive_hard_limit)
 
     def __remove_infeasible(self, problem):
         if problem.num_of_constraints > 0:
@@ -200,9 +204,9 @@ class AMOSA:
             print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
         else:
-            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
-            print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "cv min", "cv avg", "D*", "Dnad", "phi"))
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            print("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
+            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __print_statistics(self, problem):
         self.__n_eval += self.refinement_iterations
@@ -210,13 +214,14 @@ class AMOSA:
         if problem.num_of_constraints == 0:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
         else:
-            cv_min, cv_avg = self.__compute_cv()
-            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), cv_min, cv_avg, delta_ideal, delta_nad, phy))
+            feasible, cv_min, cv_avg = self.__compute_cv()
+            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __compute_cv(self):
-        g = np.array([s["g"] for s in self.__archive])
+        g = np.array([s["g"] for s in self.__archive ])
+        feasible = np.all(np.less(g, 0), axis=1).sum()
         g = g[np.where(g > 0)]
-        return 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
+        return feasible, 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
 
     def __compute_deltas(self):
         f = np.array([s["f"] for s in self.__archive])
@@ -319,6 +324,15 @@ def hill_climbing_adaptive_step(problem, s, d, up):
             step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
     s["x"][d] += step
     get_objectives(problem, s)
+
+def do_clustering(archive, hard_limit):
+    while len(archive) > hard_limit:
+        x = np.array([s["x"] for s in archive])
+        d = np.array([[np.linalg.norm(i - j) if not np.array_equal(i, j) else np.nan for j in x] for i in x])
+        i_min = np.nanargmin(d)
+        r = int(i_min / len(x))
+        c = i_min % len(x)
+        del archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
 
 def get_objectives(problem, s):
     out = {"f": [0] * problem.num_of_objectives,
