@@ -327,12 +327,15 @@ def hill_climbing_adaptive_step(problem, s, d, up):
 
 def do_clustering(archive, hard_limit):
     while len(archive) > hard_limit:
-        x = np.array([s["f"] for s in archive])
-        d = np.array([[np.linalg.norm(i - j) if not np.array_equal(i, j) else np.nan for j in x] for i in x])
-        i_min = np.nanargmin(d)
-        r = int(i_min / len(x))
-        c = i_min % len(x)
-        del archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
+        d = np.array([[np.linalg.norm(i["f"] - j["f"]) if not np.array_equal(i["x"], j ["x"]) else np.nan for j in archive] for i in archive])
+        try:
+            i_min = np.nanargmin(d)
+            r = int(i_min / len(archive))
+            c = i_min % len(archive)
+            del archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
+        except:
+            print("Clustering cannot be performed anymore")
+            return
 
 def get_objectives(problem, s):
     out = {"f": [0] * problem.num_of_objectives,
