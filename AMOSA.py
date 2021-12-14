@@ -38,15 +38,23 @@ class AMOSA:
         def evaluate(self, x, out):
             pass
 
-    def __init__(self):
-        self.archive_hard_limit = 20
-        self.archive_soft_limit = 100
-        self.initial_refinement_iterations = 2500
-        self.archive_gamma = 3
-        self.refinement_iterations = 2500
-        self.initial_temperature = 1500
-        self.final_temperature = 0.00001
-        self.cooling_factor = 0.9
+    def __init__(self,
+            archive_hard_limit = 20,
+            archive_soft_limit = 50,
+            archive_gamma = 2,
+            hill_climbing_iterations = 1500,
+            initial_temperature = 500,
+            final_temperature = 0.000001,
+            cooling_factor = 0.9,
+            annealing_iterations = 1500):
+        self.archive_hard_limit = archive_hard_limit
+        self.archive_soft_limit = archive_soft_limit
+        self.archive_gamma = archive_gamma
+        self.initial_refinement_iterations = hill_climbing_iterations
+        self.initial_temperature = initial_temperature
+        self.final_temperature = final_temperature
+        self.cooling_factor = cooling_factor
+        self.refinement_iterations = annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
         self.__n_eval = 0
@@ -184,11 +192,11 @@ class AMOSA:
 
     def __print_header(self, problem):
         if problem.num_of_constraints == 0:
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
+            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
             print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
         else:
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
             print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "cv min", "cv avg", "D*", "Dnad", "phi"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
@@ -310,7 +318,7 @@ def dominates(x, y):
     else:
         return  ((all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])) or # x is feasible while y is not
                  (any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([ i <= j for i, j in zip(x["g"], y["g"]) ]) and any([ i < j for i, j in zip(x["g"], y["g"]) ])) or #x and y are both infeasible, but x has a lower constraint violation
-                 (all(i <= 0 for i in x["f"]) and all(i <= 0 for i in y["f"]) and all([ i <= j for i, j in zip(x["f"], y["f"]) ]) and any([ i < j for i, j in zip(x["f"], y["f"]) ]))) # both are feasible, but x dominates y in the usual sense
+                 (all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([ i <= j for i, j in zip(x["f"], y["f"]) ]) and any([ i < j for i, j in zip(x["f"], y["f"]) ]))) # both are feasible, but x dominates y in the usual sense
 
 def accept(probability):
     return random.random() < probability
