@@ -33,7 +33,7 @@ class ZDT6(AMOSA.Problem):
 if __name__ == '__main__':
     problem = ZDT6()
     optimizer = AMOSA()
-    optimizer.archive_hard_limit = 50
+    optimizer.archive_hard_limit = 75
     optimizer.archive_soft_limit = 150
     optimizer.initial_refinement_iterations = 1500
     optimizer.archive_gamma = 2

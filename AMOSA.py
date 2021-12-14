@@ -17,6 +17,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import sys
 import copy
 import random
+import time
 from enum import Enum
 import numpy as np
 import matplotlib.pyplot as plt
@@ -57,6 +58,7 @@ class AMOSA:
         self.refinement_iterations = annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
+        self.duration = 0
         self.__n_eval = 0
         self.__ideal = None
         self.__nadir = None
@@ -68,10 +70,10 @@ class AMOSA:
         self.__old_f = None
         self.__ideal = None
         self.__nadir = None
+        self.duration = time.time()
         self.__initialize_archive(problem)
         if len(self.__archive) > self.archive_hard_limit:
             self.__archive_clustering()
-        self.__n_eval = self.archive_gamma * self.archive_soft_limit * self.initial_refinement_iterations
         self.__print_header(problem)
         self.__current_temperature = self.initial_temperature
         x = random.choice(self.__archive)
@@ -110,12 +112,12 @@ class AMOSA:
                         x = y
                 else:
                     raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-            self.__n_eval += self.refinement_iterations
             self.__current_temperature *= self.cooling_factor
         if len(self.__archive) > self.archive_hard_limit:
             self.__archive_clustering()
         self.__remove_infeasible(problem)
         self.__print_statistics(problem)
+        self.duration = time.time() - self.duration
 
     def pareto_front(self):
         return np.array([s["f"] for s in self.__archive])
@@ -126,14 +128,14 @@ class AMOSA:
     def constraint_violation(self):
         return np.array([s["g"] for s in self.__archive])
 
-    def plot_pareto(self, problem, pdf_file):
+    def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = ["f0", "f1"]):
         if problem.num_of_objectives == 2:
             F = self.pareto_front()
             plt.figure(figsize=(10, 10), dpi=300)
             plt.plot(F[:, 0], F[:, 1], 'k.')
-            plt.xlabel("f0")
-            plt.ylabel("f1")
-            plt.title("Pareto front")
+            plt.xlabel(axis_labels[0])
+            plt.ylabel(axis_labels[1])
+            plt.title(fig_title)
             plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
 
     def save_results(self, problem, csv_file):
@@ -163,8 +165,10 @@ class AMOSA:
             raise RuntimeError("The cooling factor for the temperature of the matter must be in the (0, 1) range")
 
     def __initialize_archive(self, problem):
-        initial_candidate_solutions = []
-        for i in range(1, self.archive_gamma * self.archive_soft_limit):
+        print("Initializing archive...")
+        self.__n_eval = self.archive_gamma * self.archive_soft_limit * self.initial_refinement_iterations
+        initial_candidate_solutions = [lower_point(problem), upper_point(problem)]
+        for _ in range(self.archive_gamma * self.archive_soft_limit):
             initial_candidate_solutions.append(hill_climbing(problem, random_point(problem), self.initial_refinement_iterations))
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
@@ -201,6 +205,7 @@ class AMOSA:
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __print_statistics(self, problem):
+        self.__n_eval += self.refinement_iterations
         delta_nad, delta_ideal, phy = self.__compute_deltas()
         if problem.num_of_constraints == 0:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
@@ -250,6 +255,22 @@ def hill_climbing(problem, x, max_iterations):
 def random_point(problem):
     x = {
         "x": [ random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)],
+        "f": [0] * problem.num_of_objectives,
+        "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+    get_objectives(problem, x)
+    return x
+
+def lower_point(problem):
+    x = {
+        "x": problem.lower_bound,
+        "f": [0] * problem.num_of_objectives,
+        "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+    get_objectives(problem, x)
+    return x
+
+def upper_point(problem):
+    x = {
+        "x": problem.upper_bound,
         "f": [0] * problem.num_of_objectives,
         "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
     get_objectives(problem, x)

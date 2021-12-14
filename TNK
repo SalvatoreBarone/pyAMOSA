@@ -32,8 +32,8 @@ class TNK(AMOSA.Problem):
 if __name__ == '__main__':
     problem = TNK()
     optimizer = AMOSA()
-    optimizer.archive_hard_limit = 50
-    optimizer.archive_soft_limit = 100
+    optimizer.archive_hard_limit = 150
+    optimizer.archive_soft_limit = 300
     optimizer.initial_refinement_iterations = 2500
     optimizer.archive_gamma = 3
     optimizer.refinement_iterations = 2500
