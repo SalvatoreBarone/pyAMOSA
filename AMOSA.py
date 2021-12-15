@@ -327,7 +327,7 @@ def hill_climbing_adaptive_step(problem, s, d, up):
 
 def do_clustering(archive, hard_limit):
     while len(archive) > hard_limit:
-        d = np.array([[np.linalg.norm(i["f"] - j["f"]) if not np.array_equal(i["x"], j ["x"]) else np.nan for j in archive] for i in archive])
+        d = np.array([[np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) if not np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.nan for j in archive] for i in archive])
         try:
             i_min = np.nanargmin(d)
             r = int(i_min / len(archive))
