@@ -14,13 +14,30 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys
-import copy
-import random
-import time
-from enum import Enum
+import sys, copy, random, time
 import numpy as np
 import matplotlib.pyplot as plt
+from enum import Enum
+
+class AMOSAConfig:
+    def __init__(
+            self,
+            archive_hard_limit = 20,
+            archive_soft_limit = 50,
+            archive_gamma = 2,
+            hill_climbing_iterations = 500,
+            initial_temperature = 500,
+            final_temperature = 0.000001,
+            cooling_factor = 0.9,
+            annealing_iterations = 500):
+        self.archive_hard_limit = archive_hard_limit
+        self.archive_soft_limit = archive_soft_limit
+        self.archive_gamma = archive_gamma
+        self.hill_climbing_iterations = hill_climbing_iterations
+        self.initial_temperature = initial_temperature
+        self.final_temperature = final_temperature
+        self.cooling_factor = cooling_factor
+        self.annealing_iterations = annealing_iterations
 
 class AMOSA:
     class Type(Enum):
@@ -56,6 +73,23 @@ class AMOSA:
         self.final_temperature = final_temperature
         self.cooling_factor = cooling_factor
         self.refinement_iterations = annealing_iterations
+        self.__current_temperature = 0
+        self.__archive = []
+        self.duration = 0
+        self.__n_eval = 0
+        self.__ideal = None
+        self.__nadir = None
+        self.__old_f = []
+
+    def __int__(self, config):
+        self.__archive_hard_limit = config.__archive_hard_limit
+        self.__archive_soft_limit = config.__archive_soft_limit
+        self.___archive_gamma = config.___archive_gamma
+        self.__hill_climbing_iterations = config.hill_climbing_iterations
+        self.__initial_temperature = config.__initial_temperature
+        self.__final_temperature = config.__final_temperature
+        self.__cooling_factor = config.__cooling_factor
+        self.__annealing_iterations = config.__annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
         self.duration = 0
