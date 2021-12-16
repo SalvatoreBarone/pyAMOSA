@@ -57,22 +57,22 @@ class AMOSA:
             pass
 
     def __init__(self,
-            archive_hard_limit = 20,
-            archive_soft_limit = 50,
-            archive_gamma = 2,
-            hill_climbing_iterations = 1500,
-            initial_temperature = 500,
-            final_temperature = 0.000001,
-            cooling_factor = 0.9,
-            annealing_iterations = 1500):
-        self.archive_hard_limit = archive_hard_limit
-        self.archive_soft_limit = archive_soft_limit
-        self.archive_gamma = archive_gamma
-        self.initial_refinement_iterations = hill_climbing_iterations
-        self.initial_temperature = initial_temperature
-        self.final_temperature = final_temperature
-        self.cooling_factor = cooling_factor
-        self.refinement_iterations = annealing_iterations
+            archive_hard_limit,
+            archive_soft_limit,
+            archive_gamma,
+            hill_climbing_iterations,
+            initial_temperature,
+            final_temperature,
+            cooling_factor,
+            annealing_iterations):
+        self.__archive_hard_limit = archive_hard_limit
+        self.__archive_soft_limit = archive_soft_limit
+        self.__archive_gamma = archive_gamma
+        self.__hill_climbing_iterations = hill_climbing_iterations
+        self.__initial_temperature = initial_temperature
+        self.__final_temperature = final_temperature
+        self.__cooling_factor = cooling_factor
+        self.__annealing_iterations = annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
         self.duration = 0
@@ -81,15 +81,15 @@ class AMOSA:
         self.__nadir = None
         self.__old_f = []
 
-    def __int__(self, config):
-        self.__archive_hard_limit = config.__archive_hard_limit
-        self.__archive_soft_limit = config.__archive_soft_limit
-        self.___archive_gamma = config.___archive_gamma
+    def __init__(self, config):
+        self.__archive_hard_limit = config.archive_hard_limit
+        self.__archive_soft_limit = config.archive_soft_limit
+        self.__archive_gamma = config.archive_gamma
         self.__hill_climbing_iterations = config.hill_climbing_iterations
-        self.__initial_temperature = config.__initial_temperature
-        self.__final_temperature = config.__final_temperature
-        self.__cooling_factor = config.__cooling_factor
-        self.__annealing_iterations = config.__annealing_iterations
+        self.__initial_temperature = config.initial_temperature
+        self.__final_temperature = config.final_temperature
+        self.__cooling_factor = config.cooling_factor
+        self.__annealing_iterations = config.annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
         self.duration = 0
@@ -106,14 +106,14 @@ class AMOSA:
         self.__nadir = None
         self.duration = time.time()
         self.__initialize_archive(problem)
-        if len(self.__archive) > self.archive_hard_limit:
+        if len(self.__archive) > self.__archive_hard_limit:
             self.__archive_clustering(problem)
         self.__print_header(problem)
-        self.__current_temperature = self.initial_temperature
+        self.__current_temperature = self.__initial_temperature
         x = random.choice(self.__archive)
-        while self.__current_temperature > self.final_temperature:
+        while self.__current_temperature > self.__final_temperature:
             self.__print_statistics(problem)
-            for i in range(self.refinement_iterations):
+            for i in range(self.__annealing_iterations):
                 y = random_perturbation(problem, x)
                 fitness_range = self.__compute_fitness_range(x, y)
                 s_dominating_y = [s for s in self.__archive if dominates(s, y)]
@@ -131,7 +131,7 @@ class AMOSA:
                             x = y
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
-                        if len(self.__archive) > self.archive_soft_limit:
+                        if len(self.__archive) > self.__archive_soft_limit:
                             self.__archive_clustering(problem)
                         x = y
                 elif dominates(y, x):
@@ -141,13 +141,13 @@ class AMOSA:
                             x = self.__archive[np.argmin(delta_dom)]
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                         self.__add_to_archive(y)
-                        if len(self.__archive) > self.archive_soft_limit:
+                        if len(self.__archive) > self.__archive_soft_limit:
                             self.__archive_clustering(problem)
                         x = y
                 else:
                     raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-            self.__current_temperature *= self.cooling_factor
-        if len(self.__archive) > self.archive_hard_limit:
+            self.__current_temperature *= self.__cooling_factor
+        if len(self.__archive) > self.__archive_hard_limit:
             self.__archive_clustering(problem)
         self.__remove_infeasible(problem)
         self.__print_statistics(problem)
@@ -183,27 +183,27 @@ class AMOSA:
         sys.stdout = original_stdout
 
     def __parameters_check(self):
-        if self.archive_hard_limit > self.archive_soft_limit:
+        if self.__archive_hard_limit > self.__archive_soft_limit:
             raise RuntimeError("Hard limit must be greater than the soft one")
-        if self.initial_refinement_iterations < 1:
+        if self.__hill_climbing_iterations < 1:
             raise RuntimeError("Initial hill-climbing refinement iterations must be greater or equal to 1")
-        if self.archive_gamma < 1:
+        if self.__archive_gamma < 1:
             raise RuntimeError("Gamma for initial hill-climbing refinement must be greater than 1")
-        if self.refinement_iterations < 1:
+        if self.__annealing_iterations < 1:
             raise RuntimeError("Refinement iterations must be greater than 1")
-        if self.final_temperature <= 0:
+        if self.__final_temperature <= 0:
             raise RuntimeError("Final temperature of the matter must be greater or equal to 0")
-        if self.initial_temperature <= self.final_temperature:
+        if self.__initial_temperature <= self.__final_temperature:
             raise RuntimeError("Initial temperature of the matter must be greater than the final one")
-        if self.cooling_factor <= 0 or self.cooling_factor >= 1:
+        if self.__cooling_factor <= 0 or self.__cooling_factor >= 1:
             raise RuntimeError("The cooling factor for the temperature of the matter must be in the (0, 1) range")
 
     def __initialize_archive(self, problem):
         print("Initializing archive...")
-        self.__n_eval = self.archive_gamma * self.archive_soft_limit * self.initial_refinement_iterations
+        self.__n_eval = self.__archive_gamma * self.__archive_soft_limit * self.__hill_climbing_iterations
         initial_candidate_solutions = [lower_point(problem), upper_point(problem)]
-        for _ in range(self.archive_gamma * self.archive_soft_limit):
-            initial_candidate_solutions.append(hill_climbing(problem, random_point(problem), self.initial_refinement_iterations))
+        for _ in range(self.__archive_gamma * self.__archive_soft_limit):
+            initial_candidate_solutions.append(hill_climbing(problem, random_point(problem), self.__hill_climbing_iterations))
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
 
@@ -219,14 +219,14 @@ class AMOSA:
         if problem.num_of_constraints > 0:
             feasible = [s for s in self.__archive if all([g <= 0 for g in s["g"]])]
             non_feasible = [s for s in self.__archive if all([g > 0 for g in s["g"]])]
-            if len(feasible) > self.archive_hard_limit:
-                do_clustering(feasible, self.archive_hard_limit)
+            if len(feasible) > self.__archive_hard_limit:
+                do_clustering(feasible, self.__archive_hard_limit)
                 self.__archive = feasible
             else:
-                do_clustering(non_feasible, self.archive_hard_limit - len(feasible))
+                do_clustering(non_feasible, self.__archive_hard_limit - len(feasible))
                 self.__archive = non_feasible + feasible
         else:
-            do_clustering(self.__archive, self.archive_hard_limit)
+            do_clustering(self.__archive, self.__archive_hard_limit)
 
     def __remove_infeasible(self, problem):
         if problem.num_of_constraints > 0:
@@ -243,7 +243,7 @@ class AMOSA:
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __print_statistics(self, problem):
-        self.__n_eval += self.refinement_iterations
+        self.__n_eval += self.__annealing_iterations
         delta_nad, delta_ideal, phy = self.__compute_deltas()
         if problem.num_of_constraints == 0:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
@@ -293,7 +293,7 @@ def hill_climbing(problem, x, max_iterations):
 
 def random_point(problem):
     x = {
-        "x": [ random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)],
+        "x": [ l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)],
         "f": [0] * problem.num_of_objectives,
         "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
     get_objectives(problem, x)
