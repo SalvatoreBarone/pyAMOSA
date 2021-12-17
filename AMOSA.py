@@ -201,8 +201,10 @@ class AMOSA:
     def __initialize_archive(self, problem):
         print("Initializing archive...")
         self.__n_eval = self.__archive_gamma * self.__archive_soft_limit * self.__hill_climbing_iterations
+        num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
         initial_candidate_solutions = [lower_point(problem), upper_point(problem)]
-        for _ in range(self.__archive_gamma * self.__archive_soft_limit):
+        for i in range(num_of_initial_candidate_solutions):
+            print(f"  {i + 1}/{num_of_initial_candidate_solutions}", end = "\r", flush = True)
             initial_candidate_solutions.append(hill_climbing(problem, random_point(problem), self.__hill_climbing_iterations))
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
