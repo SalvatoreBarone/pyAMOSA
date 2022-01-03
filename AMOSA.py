@@ -370,7 +370,7 @@ def do_clustering(archive, hard_limit):
             c = i_min % len(archive)
             del archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
         except:
-            print("Clustering cannot be performed anymore")
+            #print("Clustering cannot be performed anymore")
             return
 
 def get_objectives(problem, s):
