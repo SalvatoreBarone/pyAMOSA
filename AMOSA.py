@@ -162,14 +162,24 @@ class AMOSA:
     def constraint_violation(self):
         return np.array([s["g"] for s in self.__archive])
 
-    def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = ["f0", "f1"]):
+    def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = ["f0", "f1", "f2"]):
+        F = self.pareto_front()
         if problem.num_of_objectives == 2:
-            F = self.pareto_front()
             plt.figure(figsize=(10, 10), dpi=300)
             plt.plot(F[:, 0], F[:, 1], 'k.')
             plt.xlabel(axis_labels[0])
             plt.ylabel(axis_labels[1])
             plt.title(fig_title)
+            plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
+        elif problem.num_of_objectives == 3:
+            fig = plt.figure()
+            ax = fig.add_subplot(projection='3d')
+            ax.set_xlabel(axis_labels[0])
+            ax.set_ylabel(axis_labels[1])
+            ax.set_zlabel(axis_labels[2])
+            plt.title(fig_title)
+            ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker='.', color='k')
+            plt.tight_layout()
             plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
 
     def save_results(self, problem, csv_file):
