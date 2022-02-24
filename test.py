@@ -22,6 +22,7 @@ if __name__ == '__main__':
     optimizer.initial_temperature = 50
     optimizer.final_temperature = 0.0001
     optimizer.cooling_factor = 0.9
+    optimizer.early_termination = 15
     optimizer.minimize(problem)
     optimizer.save_results(problem, "test.csv")
     optimizer.plot_pareto(problem, "test.pdf")

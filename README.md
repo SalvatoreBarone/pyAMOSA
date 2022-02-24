@@ -70,6 +70,7 @@ The ```AMOSA``` class allows setting a vast plethora of configuration parameters
  - the ```initial_temperature``` is the initial temperature of the matter;
  - the ```final_temperature``` is the final temperature of the matter;
  - the ```cooling_factor``` governs how quickly the temperature of the matter decreases during the annealing process.
+ - the ```early_termination_window``` parameter allows the early-termination of the algorithm in case the Pareto-front does not improve through the specified amount of iterations. See [3] for more.
 
 ```
 optimizer.archive_hard_limit = 50
@@ -80,6 +81,7 @@ optimizer.refinement_iterations = 2500
 optimizer.initial_temperature = 500
 optimizer.final_temperature = 0.0000001
 optimizer.cooling_factor = 0.8
+optimizer.early_termination_window = 20
 ```
 Now you can procede solving the problem.
 ```
@@ -115,3 +117,4 @@ class Problem(AMOSA.Problem):
 ## References
 1. Bandyopadhyay, S., Saha, S., Maulik, U., & Deb, K. (2008). A simulated annealing-based multiobjective optimization algorithm: AMOSA. IEEE transactions on evolutionary computation, 12(3), 269-283.
 2. Deb, K. (2001). Multiobjective Optimization Using Evolutionary Algorithms. New York: Wiley, 2001
+3. Blank, Julian, and Kalyanmoy Deb. "A running performance metric and termination criterion for evaluating evolutionary multi-and many-objective optimization algorithms." 2020 IEEE Congress on Evolutionary Computation (CEC). IEEE, 2020.
