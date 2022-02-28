@@ -160,7 +160,7 @@ class AMOSA:
                 self.__current_temperature *= self.__cooling_factor
             else:
                 if self.__phy[-self.__early_termination_window:] == 0:
-                    print("Earlytermination criterion has been met!")
+                    print("Early-termination criterion has been met!")
                     self.__current_temperature = self.__final_temperature
                 else:
                     self.__current_temperature *= self.__cooling_factor
