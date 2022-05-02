@@ -19,6 +19,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
 
+
 class AMOSAConfig:
     def __init__(
             self,
@@ -30,8 +31,17 @@ class AMOSAConfig:
             final_temperature = 0.000001,
             cooling_factor = 0.9,
             annealing_iterations = 500,
+            annealing_strength = 1,
             early_termination_window = 0
-            ):
+    ):
+        assert archive_soft_limit > archive_hard_limit > 0
+        assert archive_gamma > 0
+        assert hill_climbing_iterations >= 0
+        assert initial_temperature > final_temperature > 0
+        assert 0 < cooling_factor < 1
+        assert annealing_iterations > 0
+        assert annealing_strength >= 1
+        assert early_termination_window >= 0
         self.archive_hard_limit = archive_hard_limit
         self.archive_soft_limit = archive_soft_limit
         self.archive_gamma = archive_gamma
@@ -40,7 +50,9 @@ class AMOSAConfig:
         self.final_temperature = final_temperature
         self.cooling_factor = cooling_factor
         self.annealing_iterations = annealing_iterations
+        self.annealing_strength = annealing_strength
         self.early_terminator_window = early_termination_window
+
 
 class AMOSA:
     class Type(Enum):
@@ -60,15 +72,24 @@ class AMOSA:
             pass
 
     def __init__(self,
-            archive_hard_limit,
-            archive_soft_limit,
-            archive_gamma,
-            hill_climbing_iterations,
-            initial_temperature,
-            final_temperature,
-            cooling_factor,
-            annealing_iterations,
-            early_termination_window):
+                 archive_hard_limit,
+                 archive_soft_limit,
+                 archive_gamma,
+                 hill_climbing_iterations,
+                 initial_temperature,
+                 final_temperature,
+                 cooling_factor,
+                 annealing_iterations,
+                 annealing_strength,
+                 early_termination_window):
+        assert archive_soft_limit > archive_hard_limit > 0
+        assert archive_gamma > 0
+        assert hill_climbing_iterations >= 0
+        assert initial_temperature > final_temperature > 0
+        assert 0 < cooling_factor < 1
+        assert annealing_iterations > 0
+        assert annealing_strength >= 1
+        assert early_termination_window >= 0
         self.__archive_hard_limit = archive_hard_limit
         self.__archive_soft_limit = archive_soft_limit
         self.__archive_gamma = archive_gamma
@@ -77,6 +98,7 @@ class AMOSA:
         self.__final_temperature = final_temperature
         self.__cooling_factor = cooling_factor
         self.__annealing_iterations = annealing_iterations
+        self.__annealing_strength = annealing_strength
         self.__early_termination_window = early_termination_window
         self.__current_temperature = 0
         self.__archive = []
@@ -96,6 +118,7 @@ class AMOSA:
         self.__final_temperature = config.final_temperature
         self.__cooling_factor = config.cooling_factor
         self.__annealing_iterations = config.annealing_iterations
+        self.__annealing_strength = config.annealing_strength
         self.__early_termination_window = config.annealing_iterations
         self.__current_temperature = 0
         self.__archive = []
@@ -123,7 +146,7 @@ class AMOSA:
         self.__print_statistics(problem)
         while self.__current_temperature > self.__final_temperature:
             for i in range(self.__annealing_iterations):
-                y = random_perturbation(problem, x)
+                y = random_perturbation(problem, x, self.__annealing_strength)
                 fitness_range = self.__compute_fitness_range(x, y)
                 s_dominating_y = [s for s in self.__archive if dominates(s, y)]
                 k_s_dominating_y = len(s_dominating_y)
@@ -135,7 +158,7 @@ class AMOSA:
                         x = y
                 elif not dominates(x, y) and not dominates(y, x):
                     if k_s_dominating_y >= 1:
-                        delta_avg = sum([domination_amount(s, y, fitness_range) for s in s_dominating_y])  / k_s_dominating_y
+                        delta_avg = sum([domination_amount(s, y, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
                         if accept(sigmoid(-delta_avg * self.__current_temperature)):
                             x = y
                     elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
@@ -182,22 +205,22 @@ class AMOSA:
     def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = ["f0", "f1", "f2"]):
         F = self.pareto_front()
         if problem.num_of_objectives == 2:
-            plt.figure(figsize=(10, 10), dpi=300)
+            plt.figure(figsize = (10, 10), dpi = 300)
             plt.plot(F[:, 0], F[:, 1], 'k.')
             plt.xlabel(axis_labels[0])
             plt.ylabel(axis_labels[1])
             plt.title(fig_title)
-            plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
+            plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
         elif problem.num_of_objectives == 3:
             fig = plt.figure()
-            ax = fig.add_subplot(projection='3d')
+            ax = fig.add_subplot(projection = '3d')
             ax.set_xlabel(axis_labels[0])
             ax.set_ylabel(axis_labels[1])
             ax.set_zlabel(axis_labels[2])
             plt.title(fig_title)
-            ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker='.', color='k')
+            ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
             plt.tight_layout()
-            plt.savefig(pdf_file, bbox_inches='tight', pad_inches=0)
+            plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
 
     def save_results(self, problem, csv_file):
         original_stdout = sys.stdout
@@ -283,24 +306,24 @@ class AMOSA:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __compute_cv(self):
-        g = np.array([s["g"] for s in self.__archive ])
-        feasible = np.all(np.less(g, 0), axis=1).sum()
+        g = np.array([s["g"] for s in self.__archive])
+        feasible = np.all(np.less(g, 0), axis = 1).sum()
         g = g[np.where(g > 0)]
         return feasible, 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
 
     def __compute_deltas(self):
         f = np.array([s["f"] for s in self.__archive])
         if self.__nadir is None and self.__ideal is None and self.__old_f is None:
-            self.__nadir = np.max(f, axis=0)
-            self.__ideal = np.min(f, axis=0)
-            self.__old_f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir) ] for x in f[:] ])
+            self.__nadir = np.max(f, axis = 0)
+            self.__ideal = np.min(f, axis = 0)
+            self.__old_f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in f[:]])
             return np.inf, np.inf, 0
         else:
-            nadir = np.max(f, axis=0)
-            ideal = np.min(f, axis=0)
+            nadir = np.max(f, axis = 0)
+            ideal = np.min(f, axis = 0)
             delta_nad = np.max([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
             delta_ideal = np.max([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
-            f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir) ] for x in f[:] ])
+            f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in f[:]])
             phy = sum([np.min([np.linalg.norm(p - q) for q in f[:]]) for p in self.__old_f[:]]) / len(self.__old_f)
             self.__nadir = nadir
             self.__ideal = ideal
@@ -309,7 +332,8 @@ class AMOSA:
 
     def __compute_fitness_range(self, x, y):
         f = [s["f"] for s in self.__archive] + [x["f"], y["f"]]
-        return np.max(f, axis = 0) - np.min(f, axis=0)
+        return np.max(f, axis = 0) - np.min(f, axis = 0)
+
 
 def hill_climbing(problem, x, max_iterations):
     d, up = hill_climbing_direction(problem)
@@ -322,13 +346,15 @@ def hill_climbing(problem, x, max_iterations):
             d, up = hill_climbing_direction(problem, d)
     return x
 
+
 def random_point(problem):
     x = {
-        "x": [ l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)],
+        "x": [l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)],
         "f": [0] * problem.num_of_objectives,
         "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
     get_objectives(problem, x)
     return x
+
 
 def lower_point(problem):
     x = {
@@ -338,6 +364,7 @@ def lower_point(problem):
     get_objectives(problem, x)
     return x
 
+
 def upper_point(problem):
     x = {
         "x": problem.upper_bound,
@@ -346,23 +373,18 @@ def upper_point(problem):
     get_objectives(problem, x)
     return x
 
-def random_perturbation(problem, s):
+
+def random_perturbation(problem, s, strength):
     z = copy.deepcopy(s)
-    step = 0
-    d, up = hill_climbing_direction(problem)
-    while step == 0:
-        d, up = hill_climbing_direction(problem)
-        lower_bound = problem.lower_bound[d] - z["x"][d]
-        upper_bound = problem.upper_bound[d] - z["x"][d]
-        if (up == -1 and lower_bound == 0) or (up == 1 and upper_bound == 0):
-            continue
-        if problem.types[d] == AMOSA.Type.INTEGER:
-            step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
-        else:
-            step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
-    z["x"][d] += step
+    indexes = random.sample(range(problem.num_of_variables), strength)
+    for i in indexes:
+        l = problem.lower_bound[i]
+        u = problem.upper_bound[i]
+        t = problem.types[i]
+        z["x"][i] = l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u)
     get_objectives(problem, z)
     return z
+
 
 def hill_climbing_direction(problem, c_d = None):
     if c_d is None:
@@ -373,6 +395,7 @@ def hill_climbing_direction(problem, c_d = None):
         while c_d == d:
             d = random.randrange(0, problem.num_of_variables)
         return d, up
+
 
 def hill_climbing_adaptive_step(problem, s, d, up):
     lower_bound = problem.lower_bound[d] - s["x"][d]
@@ -390,6 +413,7 @@ def hill_climbing_adaptive_step(problem, s, d, up):
     s["x"][d] += step
     get_objectives(problem, s)
 
+
 def do_clustering(archive, hard_limit):
     while len(archive) > hard_limit:
         d = np.array([[np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) if not np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.nan for j in archive] for i in archive])
@@ -402,6 +426,7 @@ def do_clustering(archive, hard_limit):
             # print("Clustering cannot be performed anymore")
             return
 
+
 def get_objectives(problem, s):
     out = {"f": [0] * problem.num_of_objectives,
            "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
@@ -409,25 +434,33 @@ def get_objectives(problem, s):
     s["f"] = out["f"]
     s["g"] = out["g"]
 
+
 def is_the_same(x, y):
     return x["x"] == y["x"]
+
 
 def not_the_same(x, y):
     return x["x"] != y["x"]
 
+
 def dominates(x, y):
     if x["g"] is None:
-        return all( i <= j for i, j in zip(x["f"], y["f"]) ) and any( i < j for i, j in zip(x["f"], y["f"]) )
+        return all(i <= j for i, j in zip(x["f"], y["f"])) and any(i < j for i, j in zip(x["f"], y["f"]))
     else:
-        return  ((all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])) or # x is feasible while y is not
-                 (any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([ i <= j for i, j in zip(x["g"], y["g"]) ]) and any([ i < j for i, j in zip(x["g"], y["g"]) ])) or #x and y are both infeasible, but x has a lower constraint violation
-                 (all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([ i <= j for i, j in zip(x["f"], y["f"]) ]) and any([ i < j for i, j in zip(x["f"], y["f"]) ]))) # both are feasible, but x dominates y in the usual sense
+        return ((all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])) or  # x is feasible while y is not
+                (any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([i <= j for i, j in zip(x["g"], y["g"])]) and any([i < j for i, j in zip(
+                    x["g"], y["g"])])) or  # x and y are both infeasible, but x has a lower constraint violation
+                (all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([i <= j for i, j in zip(x["f"], y["f"])]) and any([i < j for i, j in zip(
+                    x["f"], y["f"])])))  # both are feasible, but x dominates y in the usual sense
+
 
 def accept(probability):
     return random.random() < probability
 
+
 def domination_amount(x, y, r):
-    return np.prod([ abs(i - j) / k for i, j, k in zip (x["f"], y["f"], r) ])
+    return np.prod([abs(i - j) / k for i, j, k in zip(x["f"], y["f"], r)])
+
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(np.array(-x, dtype=np.float128)))
+    return 1 / (1 + np.exp(np.array(-x, dtype = np.float128)))

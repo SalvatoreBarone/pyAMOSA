@@ -64,9 +64,9 @@ optimizer = AMOSA()
 The ```AMOSA``` class allows setting a vast plethora of configuration parameters governing the behavior of the heuristic:
  - the ```archive_hard_limit``` attribute allows setting the HL parameter of the heuristic, i.e., the hard limit on the archive size;
  - the ```archive_soft_limit``` attribute allows setting the SL parameter of the heuristic, i.e., the soft limit on the archive size;
- - the ```initial_refinement_iterations``` is the number of refinement iterations performed during the initial hill-climbing refinement;
+ - the ```initial_hill_climbing_iterations``` is the number of refinement iterations performed during the initial hill-climbing refinement;
  - the ```archive_gamma``` attribute allows governing the amount of initial candidate solutions that are generated duting the archive initialization; 
- - the ```refinement_iterations``` allows governing the amount of refinement iterations performed during the main-loop of the heuristic;
+ - the ```annealing_iterations``` allows governing the amount of refinement iterations performed during the main-loop of the heuristic;
  - the ```initial_temperature``` is the initial temperature of the matter;
  - the ```final_temperature``` is the final temperature of the matter;
  - the ```cooling_factor``` governs how quickly the temperature of the matter decreases during the annealing process.
@@ -75,9 +75,9 @@ The ```AMOSA``` class allows setting a vast plethora of configuration parameters
 ```
 optimizer.archive_hard_limit = 50
 optimizer.archive_soft_limit = 150
-optimizer.initial_refinement_iterations = 2500
+optimizer.initial_hill_climbing_iterations = 2500
 optimizer.archive_gamma = 2
-optimizer.refinement_iterations = 2500
+optimizer.annealing_iterations = 2500
 optimizer.initial_temperature = 500
 optimizer.final_temperature = 0.0000001
 optimizer.cooling_factor = 0.8
