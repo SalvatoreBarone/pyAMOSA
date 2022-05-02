@@ -58,32 +58,52 @@ class ZDT1(AMOSA.Problem):
 Now, you have to build a proper problem object and also an optimization-engine, as follows.
 ```
 problem = ZDT1()
-optimizer = AMOSA()
+
+optimizer = AMOSA(
+                 archive_hard_limit,
+                 archive_soft_limit,
+                 archive_gamma,
+                 hill_climbing_iterations,
+                 initial_temperature,
+                 final_temperature,
+                 cooling_factor,
+                 annealing_iterations,
+                 annealing_strength,
+                 early_termination_window)
 ```
 
 The ```AMOSA``` class allows setting a vast plethora of configuration parameters governing the behavior of the heuristic:
  - the ```archive_hard_limit``` attribute allows setting the HL parameter of the heuristic, i.e., the hard limit on the archive size;
  - the ```archive_soft_limit``` attribute allows setting the SL parameter of the heuristic, i.e., the soft limit on the archive size;
- - the ```initial_hill_climbing_iterations``` is the number of refinement iterations performed during the initial hill-climbing refinement;
+ - the ```hill_climbing_iterations``` is the number of refinement iterations performed during the initial hill-climbing refinement;
  - the ```archive_gamma``` attribute allows governing the amount of initial candidate solutions that are generated duting the archive initialization; 
  - the ```annealing_iterations``` allows governing the amount of refinement iterations performed during the main-loop of the heuristic;
  - the ```initial_temperature``` is the initial temperature of the matter;
  - the ```final_temperature``` is the final temperature of the matter;
  - the ```cooling_factor``` governs how quickly the temperature of the matter decreases during the annealing process.
+ - the ```annealing_strength``` governs the strength of random perturbations during the annealing phase; specifically, the number of variables whose value is affected by perturbation.
  - the ```early_termination_window``` parameter allows the early-termination of the algorithm in case the Pareto-front does not improve through the specified amount of iterations. See [3] for more.
 
+
+You can also use an ```AMOSAConfig``` object to set configuration parameters affecting the optimizer, as follows.
 ```
-optimizer.archive_hard_limit = 50
-optimizer.archive_soft_limit = 150
-optimizer.initial_hill_climbing_iterations = 2500
-optimizer.archive_gamma = 2
-optimizer.annealing_iterations = 2500
-optimizer.initial_temperature = 500
-optimizer.final_temperature = 0.0000001
-optimizer.cooling_factor = 0.8
-optimizer.early_termination_window = 20
+problem = ZDT1()
+
+config = AMOSAConfig
+config.archive_hard_limit = 75
+config.archive_soft_limit = 150
+config.archive_gamma = 2
+config.hill_climbing_iterations = 2500
+config.initial_temperature = 500
+config.final_temperature = 0.0000001
+config.cooling_factor = 0.9
+config.annealing_iterations = 2500
+config.annealing_strength = 1
+config.early_terminator_window = 10
+
+optimizer = AMOSA(config)
 ```
-Now you can procede solving the problem.
+Now you can proceed solving the problem.
 ```
 optimizer.minimize(problem)
 ```
