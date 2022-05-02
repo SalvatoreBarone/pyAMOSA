@@ -119,7 +119,7 @@ class AMOSA:
         self.__cooling_factor = config.cooling_factor
         self.__annealing_iterations = config.annealing_iterations
         self.__annealing_strength = config.annealing_strength
-        self.__early_termination_window = config.annealing_iterations
+        self.__early_termination_window = config.early_terminator_window
         self.__current_temperature = 0
         self.__archive = []
         self.duration = 0
@@ -143,9 +143,10 @@ class AMOSA:
         self.__print_header(problem)
         self.__current_temperature = self.__initial_temperature
         x = random.choice(self.__archive)
+        self.__n_eval = self.__archive_gamma * self.__archive_soft_limit * self.__hill_climbing_iterations
         self.__print_statistics(problem)
         while self.__current_temperature > self.__final_temperature:
-            for i in range(self.__annealing_iterations):
+            for _ in range(self.__annealing_iterations):
                 y = random_perturbation(problem, x, self.__annealing_strength)
                 fitness_range = self.__compute_fitness_range(x, y)
                 s_dominating_y = [s for s in self.__archive if dominates(s, y)]
@@ -178,20 +179,24 @@ class AMOSA:
                         x = y
                 else:
                     raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {dominates(x, y)}\n y < x: {dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
+            self.__n_eval += self.__annealing_iterations
             self.__print_statistics(problem)
-            if self.__early_termination_window == 0:
-                self.__current_temperature *= self.__cooling_factor
-            else:
-                if self.__phy[-self.__early_termination_window:] == 0:
-                    print("Early-termination criterion has been met!")
-                    self.__current_temperature = self.__final_temperature
-                else:
-                    self.__current_temperature *= self.__cooling_factor
+            self.__check_early_termination()
         if len(self.__archive) > self.__archive_hard_limit:
             self.__archive_clustering(problem)
         self.__remove_infeasible(problem)
         self.__print_statistics(problem)
         self.duration = time.time() - self.duration
+
+    def __check_early_termination(self):
+        if self.__early_termination_window == 0:
+            self.__current_temperature *= self.__cooling_factor
+        else:
+            if len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:]) <= np.finfo(float).eps:
+                print("Early-termination criterion has been met!")
+                self.__current_temperature = self.__final_temperature
+            else:
+                self.__current_temperature *= self.__cooling_factor
 
     def pareto_front(self):
         return np.array([s["f"] for s in self.__archive])
@@ -250,7 +255,6 @@ class AMOSA:
 
     def __initialize_archive(self, problem):
         print("Initializing archive...")
-        self.__n_eval = self.__archive_gamma * self.__archive_soft_limit * self.__hill_climbing_iterations
         num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
         initial_candidate_solutions = [lower_point(problem), upper_point(problem)]
         if self.__hill_climbing_iterations > 0:
@@ -296,9 +300,7 @@ class AMOSA:
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __print_statistics(self, problem):
-        self.__n_eval += self.__annealing_iterations
         delta_nad, delta_ideal, phy = self.__compute_deltas()
-        self.__phy.append(phy)
         if problem.num_of_constraints == 0:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
         else:
@@ -328,6 +330,7 @@ class AMOSA:
             self.__nadir = nadir
             self.__ideal = ideal
             self.__old_f = f
+            self.__phy.append(phy)
             return delta_nad, delta_ideal, phy
 
     def __compute_fitness_range(self, x, y):
