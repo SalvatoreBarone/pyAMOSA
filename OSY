@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Copyright 2021 Salvatore Barone <salvatore.barone@unina.it>
+Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
 This is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -16,6 +16,9 @@ RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 from AMOSA import *
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 class OSY(AMOSA.Problem):
     def __init__(self):
@@ -33,6 +36,74 @@ class OSY(AMOSA.Problem):
         out["f"] = [f1, f2]
         out["g"] = [g1, g2, g2, g3, g4, g5, g6]
 
+    def optimums(self):
+        """
+        The Pareto-optimal region is a concatenation of five regions. Every region lies on some of the constraints. However, for the entire Pareto-optimal region,
+        𝑥_4=𝑥_6=0. In table below shows the other variable values in each of the five regions and the constraints that are active in each region.
+        x_1             x_2             x_3             x_5
+        5               1               (1,5)           5
+        5               1               (1,5)           1
+        (4.056, 5)      (x_1-2)/3       1               1
+        0               2               (1, 3.732)      1
+        (0, 1)          2-x_1           1               1
+        """
+        set1 = np.linspace(1.01, 5, 100)
+        set3 = np.linspace(4.056, 5, 100)
+        set4 = np.linspace(1.01, 3.732, 100)
+        set5 = np.linspace(0.01, 1, 100)
+        out =   [
+                    {   "x": [5, 1, x, 0, 5, 0],
+                        "f": [0] * self.num_of_objectives,
+                        "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                    } for x in set1
+                 ] + [
+                        {   "x": [5, 1, x, 0, 1, 0],
+                            "f": [0] * self.num_of_objectives,
+                            "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                        } for x in set1
+                ] + [
+                        {   "x": [x, (x-2)/3, 1, 0, 1, 0],
+                            "f": [0] * self.num_of_objectives,
+                            "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                        } for x in set3
+                ] + [
+                        {   "x": [0, 2, x, 0, 1, 0],
+                            "f": [0] * self.num_of_objectives,
+                            "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                        } for x in set4
+                ] + [
+                        {   "x": [x, 2-x, 1, 0, 1, 0],
+                            "f": [0] * self.num_of_objectives,
+                            "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                        } for x in set5
+                ]
+        for o in out:
+            self.evaluate(o["x"], o)
+        return out
+
+
+def coverage_sets(set_A, set_B):
+    count = 0
+    for b in set_B:
+        for a in set_A:
+            if all(a <= b) and any(a < b):
+                count = count + 1
+                break
+    return count / len(set_B)
+
+
+def plot(real_pareto, high_effort, high_strength, pdf_file, axis_labels = ["f0", "f1", "f2"]):
+    real_pareto = np.array([s["f"] for s in real_pareto])
+    plt.figure(figsize = (10, 10), dpi = 300)
+    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label = "real pareto")
+    plt.plot(high_effort[:, 0], high_effort[:, 1], 'b.', label = "high effort")
+    plt.plot(high_strength[:, 0], high_strength[:, 1], 'k.', label = "high strength")
+    plt.xlabel(axis_labels[0])
+    plt.ylabel(axis_labels[1])
+    plt.legend()
+    plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
+
+
 if __name__ == '__main__':
     config = AMOSAConfig
     config.archive_hard_limit = 75
@@ -43,11 +114,24 @@ if __name__ == '__main__':
     config.final_temperature = 0.0000001
     config.cooling_factor = 0.9
     config.annealing_iterations = 2500
+    config.annealing_strength = 1
     config.early_terminator_window = 15
 
     problem = OSY()
-    optimizer = AMOSA(config)
-    optimizer.minimize(problem)
-    optimizer.save_results(problem, "osy.csv")
-    optimizer.plot_pareto(problem, "osy.pdf")
+    high_effort = AMOSA(config)
+    high_effort.minimize(problem)
+    high_effort.save_results(problem, "osy_he.csv")
+    high_effort.plot_pareto(problem, "osy_he.pdf")
+
+    config.hill_climbing_iterations = 250
+    config.annealing_iterations = 250
+    config.annealing_strength = 3
+    high_strength = AMOSA(config)
+    high_strength.minimize(problem)
+    high_strength.save_results(problem, "osy_hs.csv")
+    high_strength.plot_pareto(problem, "osy_hs.pdf")
+
+    plot(problem.optimums(), high_effort.pareto_front(), high_strength.pareto_front(), "osy_comparison.pdf")
+    print(f"C(HE,HS): {coverage_sets(high_effort.pareto_front(), high_strength.pareto_front())}")
+    print(f"C(HS,HE): {coverage_sets(high_strength.pareto_front(), high_effort.pareto_front())}")
 

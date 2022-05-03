@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Copyright 2021 Salvatore Barone <salvatore.barone@unina.it>
+Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
 This is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -48,6 +48,16 @@ class BNH(AMOSA.Problem):
         return out
 
 
+def coverage_sets(set_A, set_B):
+    count = 0
+    for b in set_B:
+        for a in set_A:
+            if all(a <= b) and any (a < b):
+                count = count + 1
+                break
+    return count / len(set_B)
+
+
 def plot(real_pareto, high_effort, high_strength, pdf_file, axis_labels = ["f0", "f1", "f2"]):
     real_pareto = np.array([s["f"] for s in real_pareto])
     plt.figure(figsize = (10, 10), dpi = 300)
@@ -71,7 +81,7 @@ if __name__ == '__main__':
     config.cooling_factor = 0.9
     config.annealing_iterations = 2500
     config.annealing_strength = 1
-    config.early_terminator_window = 15
+    config.early_terminator_window = 10
 
     problem = BNH()
     high_effort = AMOSA(config)
@@ -88,3 +98,5 @@ if __name__ == '__main__':
     high_strength.plot_pareto(problem, "bnh_hs.pdf")
 
     plot(problem.optimums(), high_effort.pareto_front(), high_strength.pareto_front(), "bnh_comparison.pdf")
+    print(f"C(HE,HS): {coverage_sets(high_effort.pareto_front(), high_strength.pareto_front())}")
+    print(f"C(HS,HE): {coverage_sets(high_strength.pareto_front(), high_effort.pareto_front())}")

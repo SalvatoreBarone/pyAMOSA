@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Copyright 2021 Salvatore Barone <salvatore.barone@unina.it>
+Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
 This is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -16,17 +16,60 @@ RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 from AMOSA import *
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 class ZDT1(AMOSA.Problem):
+    n_var = 30
+
     def __init__(self):
-        n_var = 30
-        AMOSA.Problem.__init__(self, n_var, [AMOSA.Type.REAL] * n_var, [0]*n_var, [1] * n_var, 2, 0)
+
+        AMOSA.Problem.__init__(self, ZDT1.n_var, [AMOSA.Type.REAL] * ZDT1.n_var, [0]*ZDT1.n_var, [1] * ZDT1.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
         g = 1 + 9 * sum(x[1:]) / (self.num_of_variables - 1)
         h = 1 - np.sqrt(f / g)
         out["f"] = [f, g * h ]
+
+    def optimums(self):
+        """
+        Optimum:
+        0 <= x_1 <= 1, x_i = 0 for each i in 2...n
+        """
+        pareto_set = np.linspace(0, 1, 100)
+        out =   [
+                    {   "x": [x] + [0] * (ZDT1.n_var-1),
+                        "f": [0] * self.num_of_objectives,
+                        "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
+                    } for x in pareto_set
+                 ]
+        for o in out:
+            self.evaluate(o["x"], o)
+        return out
+
+
+def coverage_sets(set_A, set_B):
+    count = 0
+    for b in set_B:
+        for a in set_A:
+            if all(a <= b) and any(a < b):
+                count = count + 1
+                break
+    return count / len(set_B)
+
+
+def plot(real_pareto, high_effort, high_strength, pdf_file, axis_labels = ["f0", "f1", "f2"]):
+    real_pareto = np.array([s["f"] for s in real_pareto])
+    plt.figure(figsize = (10, 10), dpi = 300)
+    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label = "real pareto")
+    plt.plot(high_effort[:, 0], high_effort[:, 1], 'b.', label = "high effort")
+    plt.plot(high_strength[:, 0], high_strength[:, 1], 'k.', label = "high strength")
+    plt.xlabel(axis_labels[0])
+    plt.ylabel(axis_labels[1])
+    plt.legend()
+    plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
 
 
 if __name__ == '__main__':
@@ -39,11 +82,23 @@ if __name__ == '__main__':
     config.final_temperature = 0.0000001
     config.cooling_factor = 0.9
     config.annealing_iterations = 2500
+    config.annealing_strength = 10
     config.early_terminator_window = 15
 
     problem = ZDT1()
-    optimizer = AMOSA(config)
-    optimizer.minimize(problem)
-    optimizer.save_results(problem, "zdt1.csv")
-    optimizer.plot_pareto(problem, "zdt1.pdf")
+    high_effort = AMOSA(config)
+    high_effort.minimize(problem)
+    high_effort.save_results(problem, "zdt1_he.csv")
+    high_effort.plot_pareto(problem, "zdt1_he.pdf")
 
+    config.hill_climbing_iterations = 250
+    config.annealing_iterations = 250
+    config.annealing_strength = 3
+    high_strength = AMOSA(config)
+    high_strength.minimize(problem)
+    high_strength.save_results(problem, "zdt1_hs.csv")
+    high_strength.plot_pareto(problem, "zdt1_hs.pdf")
+
+    plot(problem.optimums(), high_effort.pareto_front(), high_strength.pareto_front(), "zdt1_comparison.pdf")
+    print(f"C(HE,HS): {coverage_sets(high_effort.pareto_front(), high_strength.pareto_front())}")
+    print(f"C(HS,HE): {coverage_sets(high_strength.pareto_front(), high_effort.pareto_front())}")

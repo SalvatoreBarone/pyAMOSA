@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-Copyright 2021 Salvatore Barone <salvatore.barone@unina.it>
+Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
 This is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -16,6 +16,9 @@ RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 from AMOSA import *
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 class TNK(AMOSA.Problem):
     def __init__(self):
@@ -29,6 +32,7 @@ class TNK(AMOSA.Problem):
         out["f"] = [f1, f2 ]
         out["g"] = [g1, g2]
 
+
 if __name__ == '__main__':
     config = AMOSAConfig
     config.archive_hard_limit = 75
@@ -39,6 +43,7 @@ if __name__ == '__main__':
     config.final_temperature = 0.0000001
     config.cooling_factor = 0.9
     config.annealing_iterations = 2500
+    config.annealing_strength = 1
     config.early_terminator_window = 15
 
     problem = TNK()
