@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
@@ -15,9 +14,9 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from AMOSA import *
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 class OSY(AMOSA.Problem):
@@ -80,58 +79,3 @@ class OSY(AMOSA.Problem):
         for o in out:
             self.evaluate(o["x"], o)
         return out
-
-
-def coverage_sets(set_A, set_B):
-    count = 0
-    for b in set_B:
-        for a in set_A:
-            if all(a <= b) and any(a < b):
-                count = count + 1
-                break
-    return count / len(set_B)
-
-
-def plot(real_pareto, high_effort, high_strength, pdf_file, axis_labels = ["f0", "f1", "f2"]):
-    real_pareto = np.array([s["f"] for s in real_pareto])
-    plt.figure(figsize = (10, 10), dpi = 300)
-    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label = "real pareto")
-    plt.plot(high_effort[:, 0], high_effort[:, 1], 'b.', label = "high effort")
-    plt.plot(high_strength[:, 0], high_strength[:, 1], 'k.', label = "high strength")
-    plt.xlabel(axis_labels[0])
-    plt.ylabel(axis_labels[1])
-    plt.legend()
-    plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
-
-
-if __name__ == '__main__':
-    config = AMOSAConfig
-    config.archive_hard_limit = 75
-    config.archive_soft_limit = 150
-    config.archive_gamma = 2
-    config.hill_climbing_iterations = 2500
-    config.initial_temperature = 500
-    config.final_temperature = 0.0000001
-    config.cooling_factor = 0.9
-    config.annealing_iterations = 2500
-    config.annealing_strength = 1
-    config.early_terminator_window = 15
-
-    problem = OSY()
-    high_effort = AMOSA(config)
-    high_effort.minimize(problem)
-    high_effort.save_results(problem, "osy_he.csv")
-    high_effort.plot_pareto(problem, "osy_he.pdf")
-
-    config.hill_climbing_iterations = 250
-    config.annealing_iterations = 250
-    config.annealing_strength = 3
-    high_strength = AMOSA(config)
-    high_strength.minimize(problem)
-    high_strength.save_results(problem, "osy_hs.csv")
-    high_strength.plot_pareto(problem, "osy_hs.pdf")
-
-    plot(problem.optimums(), high_effort.pareto_front(), high_strength.pareto_front(), "osy_comparison.pdf")
-    print(f"C(HE,HS): {coverage_sets(high_effort.pareto_front(), high_strength.pareto_front())}")
-    print(f"C(HS,HE): {coverage_sets(high_strength.pareto_front(), high_effort.pareto_front())}")
-

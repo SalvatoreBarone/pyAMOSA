@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 """
 Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
@@ -15,9 +14,9 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from AMOSA import *
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 class TNK(AMOSA.Problem):
@@ -31,24 +30,4 @@ class TNK(AMOSA.Problem):
         g2 = (x[0] - 0.5) ** 2 + (x[1] - 0.5) ** 2 - 0.5
         out["f"] = [f1, f2 ]
         out["g"] = [g1, g2]
-
-
-if __name__ == '__main__':
-    config = AMOSAConfig
-    config.archive_hard_limit = 75
-    config.archive_soft_limit = 150
-    config.archive_gamma = 2
-    config.hill_climbing_iterations = 2500
-    config.initial_temperature = 500
-    config.final_temperature = 0.0000001
-    config.cooling_factor = 0.9
-    config.annealing_iterations = 2500
-    config.annealing_strength = 1
-    config.early_terminator_window = 15
-
-    problem = TNK()
-    optimizer = AMOSA(config)
-    optimizer.minimize(problem)
-    optimizer.save_results(problem, "tnk.csv")
-    optimizer.plot_pareto(problem, "tnk.pdf")
 

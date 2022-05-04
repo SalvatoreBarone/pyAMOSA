@@ -1,0 +1,128 @@
+#!/usr/bin/python3
+"""
+Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
+
+This is free software; you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free
+Software Foundation; either version 3 of the License, or any later version.
+
+This is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+more details.
+
+You should have received a copy of the GNU General Public License along with
+RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
+Street, Fifth Floor, Boston, MA 02110-1301, USA.
+"""
+import os, sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from BNH import *
+from OSY import *
+from TNK import *
+from ZDT1 import *
+from ZDT2 import *
+from ZDT3 import *
+from ZDT4 import *
+from ZDT6 import *
+import numpy as np
+import matplotlib.pyplot as plt
+import click
+
+problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
+
+
+def coverage_sets(set_A, set_B):
+    count = 0
+    for b in set_B:
+        for a in set_A:
+            if all(a <= b) and any (a < b):
+                count = count + 1
+                break
+    return count / len(set_B)
+
+
+def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile):
+    problem = problems[prob]
+    config = AMOSAConfig
+    config.archive_hard_limit = hard
+    config.archive_soft_limit = soft
+    config.archive_gamma = gamma
+    config.hill_climbing_iterations = climb
+    config.initial_temperature = itemp
+    config.final_temperature = ftemp
+    config.cooling_factor = cool
+    config.annealing_iterations = iter
+    config.annealing_strength = strg
+    config.early_terminator_window = win
+    optimizer = AMOSA(config)
+    optimizer.minimize(problem)
+    optimizer.save_results(problem, csvfile)
+    optimizer.plot_pareto(problem, plotfile)
+
+
+@click.group()
+def main():
+    pass
+
+
+@main.command('plot')
+@click.option('-r', '--real', type = str, required = True, help = 'Path of the real Pareto-front csv')
+@click.option('-e', '--effort', type = str, required = True, help = 'Path of the high-effort estimation of the Pareto-front csv')
+@click.option('-s', '--strength', type = str, required = True, help = 'Path of the high-strength estimation of the Pareto-front csv')
+@click.option('-o', '--output', type = str, required = True, help = 'Fine name of the output plot')
+def plot(real_pareto_csv, high_effort_csv, high_strength_csv, out_pdf_file):
+    real_pareto = np.genfromtxt(real_pareto_csv, delimiter=';', usecols=(0, 1), skip_header=1)
+    high_effort = np.genfromtxt(high_effort_csv, delimiter=';', usecols=(0, 1), skip_header=1)
+    high_strength =  np.genfromtxt(high_strength_csv, delimiter=';', usecols=(0, 1), skip_header=1)
+    axis_labels = ["f0", "f1", "f2"]
+    real_pareto = np.array([s["f"] for s in real_pareto])
+    plt.figure(figsize = (10, 10), dpi = 300)
+    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label="real pareto")
+    plt.plot(high_effort[:, 0], high_effort[:, 1], 'b.', label="high effort")
+    plt.plot(high_strength[:, 0], high_strength[:, 1], 'k.', label="high strength")
+    plt.xlabel(axis_labels[0])
+    plt.ylabel(axis_labels[1])
+    plt.legend()
+    plt.savefig(out_pdf_file, bbox_inches = 'tight', pad_inches = 0)
+    print(f"C(HE,HS): {coverage_sets(high_effort, high_strength)}")
+    print(f"C(HS,HE): {coverage_sets(high_strength, high_effort)}")
+
+
+@main.command('run')
+@click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
+@click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
+@click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
+@click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
+@click.option('--climb', type = int, required = False, default = 2500, help = 'Hill climbing iterations')
+@click.option('--itemp', type = float, required = False, default = 500, help = 'Initial temperature')
+@click.option('--ftemp', type = float, required = False, default = 0.0000001, help = 'Final temperature')
+@click.option('--cool', type = float, required = False, default = 0.9, help = 'Cooling factor')
+@click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
+@click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
+@click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
+@click.option('--csvfile', type = str, required = False, default = "pareto_front.csv", help = 'Output csv file for the Pareto-front')
+@click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile):
+    run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile)
+
+
+@main.command('runall')
+def runall():
+    parameters = (
+        {"prob": "BNH",  "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "BNH.csv", "plot": "BNH.pdf"},
+        {"prob": "OSY",  "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "OSY.csv", "plot": "OSY.pdf"},
+        {"prob": "TNK",  "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "TNK.csv", "plot": "TNK.pdf"},
+        {"prob": "ZDT1", "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "ZDT1.csv", "plot": "ZDT1.pdf"},
+        {"prob": "ZDT2", "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "ZDT2.csv", "plot": "ZDT2.pdf"},
+        {"prob": "ZDT3", "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "ZDT3.csv", "plot": "ZDT3.pdf"},
+        {"prob": "ZDT4", "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "ZDT4.csv", "plot": "ZDT4.pdf"},
+        {"prob": "ZDT6", "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "ZDT6.csv", "plot": "ZDT6.pdf"}
+    )
+    for p in parameters:
+        print("Solving {problem}".format(problem = p["prob"]))
+        run_optz(p["prob"], p["hard"], p["soft"], p["gamma"], p["climb"], p["itemp"], p["ftemp"], p["cool"], p["iter"], p["str"], p["phy"], p["csv"], p["plot"])
+
+
+if __name__ == '__main__':
+    main(obj={})

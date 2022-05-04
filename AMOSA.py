@@ -379,7 +379,7 @@ def upper_point(problem):
 
 def random_perturbation(problem, s, strength):
     z = copy.deepcopy(s)
-    indexes = random.sample(range(problem.num_of_variables), strength)
+    indexes = random.sample(range(problem.num_of_variables), min([strength, problem.num_of_variables]))
     for i in indexes:
         l = problem.lower_bound[i]
         u = problem.upper_bound[i]
