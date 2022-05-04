@@ -71,6 +71,9 @@ class AMOSA:
         def evaluate(self, x, out):
             pass
 
+        def optimums(self):
+            return []
+
     def __init__(self,
                  archive_hard_limit,
                  archive_soft_limit,
@@ -207,7 +210,9 @@ class AMOSA:
     def constraint_violation(self):
         return np.array([s["g"] for s in self.__archive])
 
-    def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = ["f0", "f1", "f2"]):
+    def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = None):
+        if axis_labels is None:
+            axis_labels = [ "f" + str(i) for i in range(problem.num_of_objectives)]
         F = self.pareto_front()
         if problem.num_of_objectives == 2:
             plt.figure(figsize = (10, 10), dpi = 300)
@@ -379,7 +384,7 @@ def upper_point(problem):
 
 def random_perturbation(problem, s, strength):
     z = copy.deepcopy(s)
-    indexes = random.sample(range(problem.num_of_variables), min([strength, problem.num_of_variables]))
+    indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
     for i in indexes:
         l = problem.lower_bound[i]
         u = problem.upper_bound[i]
