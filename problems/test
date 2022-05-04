@@ -61,17 +61,63 @@ def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win
     optimizer.plot_pareto(problem, plotfile)
 
 
+def plot_pareto_front(optimums, pdf_file, fig_title = "Pareto front", axis_labels = None):
+    if axis_labels is None:
+        axis_labels = [ "f" + str(i) for i in range(len(optimums[0]["f"]))]
+    F = np.array([s["f"] for s in optimums])
+    if len(optimums[0]["f"]) == 2:
+        plt.figure(figsize = (10, 10), dpi = 300)
+        plt.plot(F[:, 0], F[:, 1], 'k.')
+        plt.xlabel(axis_labels[0])
+        plt.ylabel(axis_labels[1])
+        plt.title(fig_title)
+        plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
+    elif len(optimums[0]["f"]) == 3:
+        fig = plt.figure()
+        ax = fig.add_subplot(projection = '3d')
+        ax.set_xlabel(axis_labels[0])
+        ax.set_ylabel(axis_labels[1])
+        ax.set_zlabel(axis_labels[2])
+        plt.title(fig_title)
+        ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
+        plt.tight_layout()
+        plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
+
+
+def save_pareto_front(optimums, csv_file):
+    original_stdout = sys.stdout
+    pareto_front = np.array([s["f"] for s in optimums])
+    row_format = "{:};" * len(optimums[0]["f"])
+    with open(csv_file, "w") as file:
+        sys.stdout = file
+        print(row_format.format(*[f"f{i}" for i in range(len(optimums[0]["f"]))]))
+        for f in pareto_front:
+            print(row_format.format(*f))
+    sys.stdout = original_stdout
+
+
 @click.group()
 def main():
     pass
 
 
-@main.command('plot')
+@main.command('optimums')
+@click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
+@click.option('--csvfile', type = str, required = False, default = "pareto_front.csv", help = 'Output csv file for the Pareto-front')
+@click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
+def optimums(prob, csvfile, plotfile):
+    problem = problems[prob]
+    opt = problem.optimums()
+    save_pareto_front(opt, csvfile)
+    plot_pareto_front(opt, plotfile)
+
+
+@main.command('compare')
 @click.option('-r', '--real', type = str, required = True, help = 'Path of the real Pareto-front csv')
 @click.option('-e', '--effort', type = str, required = True, help = 'Path of the high-effort estimation of the Pareto-front csv')
 @click.option('-s', '--strength', type = str, required = True, help = 'Path of the high-strength estimation of the Pareto-front csv')
 @click.option('-o', '--output', type = str, required = True, help = 'Fine name of the output plot')
-def plot(real_pareto_csv, high_effort_csv, high_strength_csv, out_pdf_file):
+def compare(real_pareto_csv, high_effort_csv, high_strength_csv, out_pdf_file):
     real_pareto = np.genfromtxt(real_pareto_csv, delimiter=';', usecols=(0, 1), skip_header=1)
     high_effort = np.genfromtxt(high_effort_csv, delimiter=';', usecols=(0, 1), skip_header=1)
     high_strength =  np.genfromtxt(high_strength_csv, delimiter=';', usecols=(0, 1), skip_header=1)
