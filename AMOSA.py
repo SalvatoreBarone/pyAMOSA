@@ -194,9 +194,6 @@ class AMOSA:
         else:
             if len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
                 print("Early-termination criterion has been met!")
-                print(f"Early termination window: {self.__early_termination_window}")
-                print(self.__phy)
-                print(self.__phy[-self.__early_termination_window:])
                 self.__current_temperature = self.__final_temperature
             else:
                 self.__current_temperature *= self.__cooling_factor
