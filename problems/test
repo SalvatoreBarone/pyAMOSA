@@ -25,22 +25,12 @@ from ZDT2 import *
 from ZDT3 import *
 from ZDT4 import *
 from ZDT6 import *
+from metrics import *
 import numpy as np
 import matplotlib.pyplot as plt
 import click
 
 problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
-
-
-def coverage_sets(set_A, set_B):
-    count = 0
-    for b in set_B:
-        for a in set_A:
-            if all(a <= b) and any (a < b):
-                count = count + 1
-                break
-    return count / len(set_B)
-
 
 def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile):
     problem = problems[prob]
@@ -61,18 +51,18 @@ def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win
     optimizer.plot_pareto(problem, plotfile)
 
 
-def plot_pareto_front(optimums, pdf_file, fig_title = "Pareto front", axis_labels = None):
+def plot_pareto_front(opts, pdf_file, fig_title ="Pareto front", axis_labels = None):
     if axis_labels is None:
-        axis_labels = [ "f" + str(i) for i in range(len(optimums[0]["f"]))]
-    F = np.array([s["f"] for s in optimums])
-    if len(optimums[0]["f"]) == 2:
+        axis_labels = [ "f" + str(i) for i in range(len(opts[0]["f"]))]
+    F = np.array([s["f"] for s in opts])
+    if len(opts[0]["f"]) == 2:
         plt.figure(figsize = (10, 10), dpi = 300)
         plt.plot(F[:, 0], F[:, 1], 'k.')
         plt.xlabel(axis_labels[0])
         plt.ylabel(axis_labels[1])
         plt.title(fig_title)
         plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
-    elif len(optimums[0]["f"]) == 3:
+    elif len(opts[0]["f"]) == 3:
         fig = plt.figure()
         ax = fig.add_subplot(projection = '3d')
         ax.set_xlabel(axis_labels[0])
@@ -84,13 +74,13 @@ def plot_pareto_front(optimums, pdf_file, fig_title = "Pareto front", axis_label
         plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
 
 
-def save_pareto_front(optimums, csv_file):
+def save_pareto_front(opts, csv_file):
     original_stdout = sys.stdout
-    pareto_front = np.array([s["f"] for s in optimums])
-    row_format = "{:};" * len(optimums[0]["f"])
+    pareto_front = np.array([s["f"] for s in opts])
+    row_format = "{:};" * len(opts[0]["f"])
     with open(csv_file, "w") as file:
         sys.stdout = file
-        print(row_format.format(*[f"f{i}" for i in range(len(optimums[0]["f"]))]))
+        print(row_format.format(*[f"f{i}" for i in range(len(opts[0]["f"]))]))
         for f in pareto_front:
             print(row_format.format(*f))
     sys.stdout = original_stdout
@@ -113,26 +103,23 @@ def optimums(prob, csvfile, plotfile):
 
 
 @main.command('compare')
-@click.option('-r', '--real', type = str, required = True, help = 'Path of the real Pareto-front csv')
-@click.option('-e', '--effort', type = str, required = True, help = 'Path of the high-effort estimation of the Pareto-front csv')
-@click.option('-s', '--strength', type = str, required = True, help = 'Path of the high-strength estimation of the Pareto-front csv')
-@click.option('-o', '--output', type = str, required = True, help = 'Fine name of the output plot')
-def compare(real_pareto_csv, high_effort_csv, high_strength_csv, out_pdf_file):
+@click.option('-r', type = str, required = True, help = 'Path of the real Pareto-front csv')
+@click.option('-e', type = str, required = True, help = 'Path of the estimation of the Pareto-front csv')
+@click.option('-o', '--output', type = str, required = True, help = 'File name of the output plot')
+def compare(real_pareto_csv, estimation_csv, out_pdf_file):
     real_pareto = np.genfromtxt(real_pareto_csv, delimiter=';', usecols=(0, 1), skip_header=1)
-    high_effort = np.genfromtxt(high_effort_csv, delimiter=';', usecols=(0, 1), skip_header=1)
-    high_strength =  np.genfromtxt(high_strength_csv, delimiter=';', usecols=(0, 1), skip_header=1)
+    estimation = np.genfromtxt(estimation_csv, delimiter=';', usecols=(0, 1), skip_header=1)
     axis_labels = ["f0", "f1", "f2"]
     real_pareto = np.array([s["f"] for s in real_pareto])
     plt.figure(figsize = (10, 10), dpi = 300)
     plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label="real pareto")
-    plt.plot(high_effort[:, 0], high_effort[:, 1], 'b.', label="high effort")
-    plt.plot(high_strength[:, 0], high_strength[:, 1], 'k.', label="high strength")
+    plt.plot(estimation[:, 0], estimation[:, 1], 'b.', label="high effort")
     plt.xlabel(axis_labels[0])
     plt.ylabel(axis_labels[1])
     plt.legend()
     plt.savefig(out_pdf_file, bbox_inches = 'tight', pad_inches = 0)
-    print(f"C(HE,HS): {coverage_sets(high_effort, high_strength)}")
-    print(f"C(HS,HE): {coverage_sets(high_strength, high_effort)}")
+    print(f"convergence: {convergence(real_pareto, estimation)}")
+    print(f"dispersion: {dispersion(real_pareto, estimation)}")
 
 
 @main.command('run')
