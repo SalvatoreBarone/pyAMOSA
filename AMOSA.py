@@ -232,6 +232,16 @@ class AMOSA:
             plt.tight_layout()
             plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
 
+    def save_pareto_set(self, problem, csv_file):
+        original_stdout = sys.stdout
+        row_format = "{:};" * problem.num_of_variables
+        with open(csv_file, "w") as file:
+            sys.stdout = file
+            print(row_format.format(*[f"x{i}" for i in range(problem.num_of_variables)]))
+            for x in self.pareto_set():
+                print(row_format.format(*x))
+        sys.stdout = original_stdout
+
     def save_results(self, problem, csv_file):
         original_stdout = sys.stdout
         row_format = "{:};" * problem.num_of_objectives + "{:};" * problem.num_of_variables
