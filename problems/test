@@ -32,7 +32,8 @@ import click
 
 problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
 
-def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile):
+
+def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile):
     problem = problems[prob]
     config = AMOSAConfig
     config.archive_hard_limit = hard
@@ -46,8 +47,31 @@ def run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win
     config.annealing_strength = strg
     config.early_terminator_window = win
     optimizer = AMOSA(config)
+    optimizer.random_archive(problem)
     optimizer.minimize(problem)
-    optimizer.save_results(problem, csvfile)
+    optimizer.save_results(problem, report)
+    optimizer.save_pareto_set(problem, results)
+    optimizer.plot_pareto(problem, plotfile)
+
+
+def rerun_optz(prob, pareto_set, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile):
+    problem = problems[prob]
+    config = AMOSAConfig
+    config.archive_hard_limit = hard
+    config.archive_soft_limit = soft
+    config.archive_gamma = gamma
+    config.hill_climbing_iterations = climb
+    config.initial_temperature = itemp
+    config.final_temperature = ftemp
+    config.cooling_factor = cool
+    config.annealing_iterations = iter
+    config.annealing_strength = strg
+    config.early_terminator_window = win
+    optimizer = AMOSA(config)
+    optimizer.seeded_archive(problem, pareto_set)
+    optimizer.minimize(problem)
+    optimizer.save_results(problem, report)
+    optimizer.save_pareto_set(problem, results)
     optimizer.plot_pareto(problem, plotfile)
 
 
@@ -87,26 +111,28 @@ def save_pareto_front(opts, csv_file):
 
 
 @click.group()
-def main():
+def cli():
     pass
 
 
-@main.command('optimums')
+@cli.command('optimums')
 @click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
 @click.option('--csvfile', type = str, required = False, default = "pareto_front.csv", help = 'Output csv file for the Pareto-front')
 @click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
 def optimums(prob, csvfile, plotfile):
+    """ Get the actual Pareto front for a given test problem """
     problem = problems[prob]
     opt = problem.optimums()
     save_pareto_front(opt, csvfile)
     plot_pareto_front(opt, plotfile)
 
 
-@main.command('compare')
+@cli.command('compare')
 @click.option('-r', type = str, required = True, help = 'Path of the real Pareto-front csv')
 @click.option('-e', type = str, required = True, help = 'Path of the estimation of the Pareto-front csv')
 @click.option('-o', '--output', type = str, required = True, help = 'File name of the output plot')
 def compare(real_pareto_csv, estimation_csv, out_pdf_file):
+    """ Compares the actual Pareto front with an estimation provided by the AMOSA """
     real_pareto = np.genfromtxt(real_pareto_csv, delimiter=';', usecols=(0, 1), skip_header=1)
     estimation = np.genfromtxt(estimation_csv, delimiter=';', usecols=(0, 1), skip_header=1)
     axis_labels = ["f0", "f1", "f2"]
@@ -122,7 +148,7 @@ def compare(real_pareto_csv, estimation_csv, out_pdf_file):
     print(f"dispersion: {dispersion(real_pareto, estimation)}")
 
 
-@main.command('run')
+@cli.command('run')
 @click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
@@ -134,14 +160,38 @@ def compare(real_pareto_csv, estimation_csv, out_pdf_file):
 @click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
 @click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
-@click.option('--csvfile', type = str, required = False, default = "pareto_front.csv", help = 'Output csv file for the Pareto-front')
+@click.option('--report', type = str, required = False, default = "report.csv", help = 'Report file')
+@click.option('--results', type = str, required = False, default = "pareto_set.csv", help = 'Output csv file for the Pareto set')
 @click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile):
-    run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, csvfile, plotfile)
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile):
+    """ Run a test problem """
+    run_optz(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile)
 
 
-@main.command('runall')
+@cli.command('rerun')
+@click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
+@click.option('--archive', type = str, required = True, help = 'Pareto set from previous run')
+@click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
+@click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
+@click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
+@click.option('--climb', type = int, required = False, default = 2500, help = 'Hill climbing iterations')
+@click.option('--itemp', type = float, required = False, default = 500, help = 'Initial temperature')
+@click.option('--ftemp', type = float, required = False, default = 0.0000001, help = 'Final temperature')
+@click.option('--cool', type = float, required = False, default = 0.9, help = 'Cooling factor')
+@click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
+@click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
+@click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
+@click.option('--report', type = str, required = False, default = "report.csv", help = 'Report file')
+@click.option('--results', type = str, required = False, default = "pareto_set.csv", help = 'Output csv file for the Pareto set')
+@click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
+def rerun(prob, archive, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile):
+    """ Run again a test problem, using previous Pareto set as initial archive """
+    rerun_optz(prob, archive, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile)
+
+
+@cli.command('runall')
 def runall():
+    """ Run all test problems """
     parameters = (
         {"prob": "BNH",  "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "BNH.csv", "plot": "BNH.pdf"},
         {"prob": "OSY",  "hard": 100, "soft": 200, "gamma": 2, "climb": 2500, "itemp": 500, "ftemp": 0.0000001, "cool": 0.9, "iter": 2500, "str": 1, "phy": 20, "csv": "OSY.csv", "plot": "OSY.pdf"},
@@ -157,5 +207,12 @@ def runall():
         run_optz(p["prob"], p["hard"], p["soft"], p["gamma"], p["climb"], p["itemp"], p["ftemp"], p["cool"], p["iter"], p["str"], p["phy"], p["csv"], p["plot"])
 
 
+cli.add_command(optimums)
+cli.add_command(compare)
+cli.add_command(run)
+cli.add_command(rerun)
+cli.add_command(runall)
+
+
 if __name__ == '__main__':
-    main(obj={})
+    cli()
