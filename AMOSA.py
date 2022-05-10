@@ -109,7 +109,7 @@ class AMOSA:
         self.__n_eval = 0
         self.__ideal = None
         self.__nadir = None
-        self.__old_f = []
+        self.__old_norm_objectives = []
         self.__phy = []
 
     def __init__(self, config):
@@ -129,7 +129,7 @@ class AMOSA:
         self.__n_eval = 0
         self.__ideal = None
         self.__nadir = None
-        self.__old_f = []
+        self.__old_norm_objectives = []
         self.__phy = []
 
     def random_archive(self, problem):
@@ -154,7 +154,7 @@ class AMOSA:
 
     def minimize(self, problem):
         self.__parameters_check()
-        self.__old_f = None
+        self.__old_norm_objectives = None
         self.__phy = []
         self.__ideal = None
         self.__nadir = None
@@ -337,28 +337,33 @@ class AMOSA:
         return feasible, 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
 
     def __compute_deltas(self):
-        f = np.array([s["f"] for s in self.__archive])
-        if self.__nadir is None and self.__ideal is None and self.__old_f is None:
-            self.__nadir = np.max(f, axis = 0)
-            self.__ideal = np.min(f, axis = 0)
-            self.__old_f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in f[:]])
+        objectives = np.array([s["f"] for s in self.__archive])
+        if self.__nadir is None and self.__ideal is None and self.__old_norm_objectives is None:
+            self.__nadir = np.max(objectives, axis = 0)
+            self.__ideal = np.min(objectives, axis = 0)
+            self.__old_norm_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in objectives[:]])
             return np.inf, np.inf, 0
         else:
-            nadir = np.max(f, axis = 0)
-            ideal = np.min(f, axis = 0)
+            nadir = np.max(objectives, axis = 0)
+            ideal = np.min(objectives, axis = 0)
             delta_nad = np.max([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
             delta_ideal = np.max([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
-            f = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in f[:]])
-            phy = sum([np.min([np.linalg.norm(p - q) for q in f[:]]) for p in self.__old_f[:]]) / len(self.__old_f)
+            normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
+            phy = AMOSA.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
             self.__nadir = nadir
             self.__ideal = ideal
-            self.__old_f = f
+            self.__old_norm_objectives = normalized_objectives
             self.__phy.append(phy)
             return delta_nad, delta_ideal, phy
+
 
     def __compute_fitness_range(self, x, y):
         f = [s["f"] for s in self.__archive] + [x["f"], y["f"]]
         return np.max(f, axis = 0) - np.min(f, axis = 0)
+
+    @staticmethod
+    def inverted_generational_distance(P_t, P_tau):
+        return sum([np.min([np.linalg.norm(p - q) for q in P_t[:]]) for p in P_tau[:]]) / len(P_tau)
 
     @staticmethod
     def hill_climbing(problem, x, max_iterations):
