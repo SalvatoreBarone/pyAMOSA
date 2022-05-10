@@ -105,6 +105,7 @@ optimizer = AMOSA(config)
 ```
 Now you can proceed solving the problem.
 ```
+optimizer.random_archive(problem)
 optimizer.minimize(problem)
 ```
 You can access the Pareto-front and the Pareto-set through the ```pareto_front()``` and ```pareto_set()``` methods of
