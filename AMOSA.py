@@ -136,21 +136,32 @@ class AMOSA:
         print("Initializing random archive...")
         num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
         initial_candidate_solutions = [AMOSA.lower_point(problem), AMOSA.upper_point(problem)]
+        padding =  " " * 30
         if self.__hill_climbing_iterations > 0:
             for i in range(num_of_initial_candidate_solutions):
-                print(f"  {i + 1}/{num_of_initial_candidate_solutions}                                                  ", end = "\r", flush = True)
+                print(f"Evaluating random point {i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
                 initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
 
     def seeded_archive(self, problem, seeds_file):
+        seeds = []
+        candidate_solutions = []
+        padding = " " * 30
         print(f"Reading initial archive from {seeds_file}...")
         file = open(seeds_file, "r")
-        file.readline() # ships the header
+        file.readline() # skips the header
         for row in file:
             c = list(filter(None, row.replace("\n", "").split(";")))
             assert len(c) == problem.num_of_variables, "Wrong amount of variables"
-            self.__add_to_archive(AMOSA.c_point(problem, [int(v) if t == AMOSA.Type.INTEGER else float(v) for v, t in zip(c, problem.types) ]))
+            seeds.append(AMOSA.c_point(problem, [int(v) if t == AMOSA.Type.INTEGER else float(v) for v, t in zip(c, problem.types) ]))
+        if self.__hill_climbing_iterations > 0:
+            num_seeds = len(seeds)
+            for s, i in zip(seeds, range(num_seeds)):
+                print(f"Evaluating seed {i + 1}/{num_seeds}{padding}", end = "\r", flush = True)
+                candidate_solutions.append(AMOSA.hill_climbing(problem, s, self.__hill_climbing_iterations))
+        for x in candidate_solutions:
+            self.__add_to_archive(x)
 
     def minimize(self, problem):
         self.__parameters_check()
