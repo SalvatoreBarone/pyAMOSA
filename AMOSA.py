@@ -139,7 +139,7 @@ class AMOSA:
         padding =  " " * 30
         if self.__hill_climbing_iterations > 0:
             for i in range(num_of_initial_candidate_solutions):
-                print(f"Evaluating random point {i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
+                print(f"  Evaluating random point #{i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
                 initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
@@ -151,14 +151,19 @@ class AMOSA:
         print(f"Reading initial archive from {seeds_file}...")
         file = open(seeds_file, "r")
         file.readline() # skips the header
+        seed_count = 1
         for row in file:
             c = list(filter(None, row.replace("\n", "").split(";")))
             assert len(c) == problem.num_of_variables, "Wrong amount of variables"
+            print(f"  Evaluating objectives of seed #{seed_count}{padding}", end="\r", flush=True)
             seeds.append(AMOSA.c_point(problem, [int(v) if t == AMOSA.Type.INTEGER else float(v) for v, t in zip(c, problem.types) ]))
+            seed_count += 1
+        num_seeds = len(seeds)
+        print(f"{num_seeds} seeds picked from {seeds_file}")
         if self.__hill_climbing_iterations > 0:
-            num_seeds = len(seeds)
+            print("Performing hill-climbing...")
             for s, i in zip(seeds, range(num_seeds)):
-                print(f"Evaluating seed {i + 1}/{num_seeds}{padding}", end = "\r", flush = True)
+                print(f"  Seed #{i + 1}/{num_seeds}{padding}", end = "\r", flush = True)
                 candidate_solutions.append(AMOSA.hill_climbing(problem, s, self.__hill_climbing_iterations))
         for x in candidate_solutions:
             self.__add_to_archive(x)
