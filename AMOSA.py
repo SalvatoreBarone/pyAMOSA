@@ -144,29 +144,46 @@ class AMOSA:
         for x in initial_candidate_solutions:
             self.__add_to_archive(x)
 
-    def seeded_archive(self, problem, seeds_file):
-        seeds = []
+    def seeded_archive(self, problem, seeds):
         candidate_solutions = []
         padding = " " * 30
-        print(f"Reading initial archive from {seeds_file}...")
-        file = open(seeds_file, "r")
-        file.readline() # skips the header
-        seed_count = 1
-        for row in file:
-            c = list(filter(None, row.replace("\n", "").split(";")))
-            assert len(c) == problem.num_of_variables, "Wrong amount of variables"
-            print(f"  Evaluating objectives of seed #{seed_count}{padding}", end="\r", flush=True)
-            seeds.append(AMOSA.c_point(problem, [int(v) if t == AMOSA.Type.INTEGER else float(v) for v, t in zip(c, problem.types) ]))
-            seed_count += 1
         num_seeds = len(seeds)
-        print(f"{num_seeds} seeds picked from {seeds_file}")
         if self.__hill_climbing_iterations > 0:
             print("Performing hill-climbing...")
             for s, i in zip(seeds, range(num_seeds)):
-                print(f"  Seed #{i + 1}/{num_seeds}{padding}", end = "\r", flush = True)
+                print(f"  Seed #{i + 1}/{num_seeds}" + padding, end = "\r", flush = True)
                 candidate_solutions.append(AMOSA.hill_climbing(problem, s, self.__hill_climbing_iterations))
         for x in candidate_solutions:
             self.__add_to_archive(x)
+
+    @staticmethod
+    def get_seeds_from_nested_list(problem, nested_list):
+        padding = " " * 30
+        seeds = []
+        seed_count = 1
+        for k in nested_list:
+            print(f"  Evaluating objectives of seed #{seed_count}" + padding, end="\r", flush=True)
+            seeds.append(AMOSA.c_point(problem, [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(k, problem.types)]))
+            seed_count += 1
+        print(f"{len(seeds)} seeds picked" + padding)
+        return seeds
+
+    @staticmethod
+    def read_seeds_from_csv(problem, seeds_file, separator = ";"):
+        padding = " " * 30
+        print(f"Reading initial archive from {seeds_file}...")
+        file = open(seeds_file, "r")
+        file.readline()  # skips the header
+        seed_count = 1
+        seeds = []
+        for row in file:
+            c = list(filter(None, row.replace("\n", "").split(separator)))
+            assert len(c) == problem.num_of_variables, "Wrong amount of variables"
+            print(f"  Evaluating objectives of seed #{seed_count}" + padding, end="\r", flush=True)
+            seeds.append(AMOSA.c_point(problem, [int(v) if t == AMOSA.Type.INTEGER else float(v) for v, t in zip(c, problem.types)]))
+            seed_count += 1
+        print(f"{len(seeds)} seeds picked from {seeds_file}" + padding )
+        return seeds
 
     def minimize(self, problem):
         self.__parameters_check()
