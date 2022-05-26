@@ -61,6 +61,9 @@ class AMOSA:
 
     class Problem:
         def __init__(self, num_of_variables, types, lower_bounds, upper_bounds, num_of_objectives, num_of_constraints):
+            assert num_of_variables == len(types), "Mismatch in the specified number of variables and their type declaration"
+            assert num_of_variables == len(lower_bounds), "Mismatch in the specified number of variables and their lower bound declaration"
+            assert num_of_variables == len(upper_bounds), "Mismatch in the specified number of variables and their upper bound declaration"
             self.num_of_variables = num_of_variables
             self.types = types
             self.lower_bound = lower_bounds
