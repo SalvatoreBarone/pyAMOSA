@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, json
+import sys, copy, random, time, os, json
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
@@ -55,6 +55,9 @@ class AMOSAConfig:
 
 
 class AMOSA:
+    hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
+    minimize_checkpoint_file = "minimize_checkpoint.json"
+
     class Type(Enum):
         INTEGER = 0
         REAL = 1
@@ -135,21 +138,53 @@ class AMOSA:
         self.__old_norm_objectives = []
         self.__phy = []
 
-    def random_archive(self, problem):
-        print("Initializing random archive...")
-        num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
-        initial_candidate_solutions = [AMOSA.lower_point(problem), AMOSA.upper_point(problem)]
-        padding =  " " * 30
-        if self.__hill_climbing_iterations > 0:
-            for i in range(num_of_initial_candidate_solutions):
-                print(f"  Evaluating random point #{i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
-                initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
-        for x in initial_candidate_solutions:
-            self.__add_to_archive(x)
+    def run(self, problem, improve = None):
+        self.__parameters_check()
+        self.__current_temperature = self.__initial_temperature
+        self.__archive = []
+        self.duration = 0
+        self.__n_eval = 0
+        self.__ideal = None
+        self.__nadir = None
+        self.__old_norm_objectives = []
+        self.__phy = []
+        self.duration = time.time()
+        if os.path.exists(self.minimize_checkpoint_file):
+            self.__read_checkpoint_minimize(problem, self.minimize_checkpoint_file)
+        elif os.path.exists(self.hill_climb_checkpoint_file):
+            initial_candidate = self.__read_checkpoint_hill_climb(problem, self.hill_climb_checkpoint_file)
+            self.__initial_hill_climbing(problem, initial_candidate)
+            self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
+            os.remove(self.hill_climb_checkpoint_file)
+        elif improve is not None:
+            self.__archive_from_json(problem, improve)
+            self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
+            os.remove(self.hill_climb_checkpoint_file)
+        else:
+            self.__random_archive(problem)
+            self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
+            os.remove(self.hill_climb_checkpoint_file)
+        assert len(self.__archive) > 0, "Archive not initialized"
+        self.__print_header(problem)
+        self.__print_statistics(problem)
+        self.__main_loop(problem)
+        self.__remove_infeasible(problem)
+        if len(self.__archive) > self.__archive_hard_limit:
+            self.__archive_clustering(problem)
+        self.__print_statistics(problem)
+        self.duration = time.time() - self.duration
+        os.remove(self.minimize_checkpoint_file)
 
-    def archive_from_json(self, problem, json_file):
+    def __random_archive(self, problem):
+        print("Initializing random archive...")
+        initial_candidate_solutions = [AMOSA.lower_point(problem), AMOSA.upper_point(problem)]
+        self.__initial_hill_climbing(problem, initial_candidate_solutions)
+
+    def __archive_from_json(self, problem, json_file):
+        print("Initializing archive from JSON file...")
         archive = json.load(open(json_file))
-        self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
+        initial_candidate_solutions = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
+        self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
     @staticmethod
     def archive_from_nested_list(problem, nested_list):
@@ -163,45 +198,7 @@ class AMOSA:
         print(f"{len(seeds)} seeds picked" + padding)
         return seeds
 
-    def minimize(self, problem, checkpoint_file = "checkpoint.json"):
-        self.__parameters_check()
-        self.__old_norm_objectives = None
-        self.__phy = []
-        self.__ideal = None
-        self.__nadir = None
-        self.duration = time.time()
-        assert len(self.__archive) > 0, "Archive not initialized"
-        if len(self.__archive) > self.__archive_hard_limit:
-            self.__archive_clustering(problem)
-        self.__print_header(problem)
-        self.__current_temperature = self.__initial_temperature
-        self.__n_eval = self.__archive_gamma * self.__archive_soft_limit * self.__hill_climbing_iterations
-        self.__print_statistics(problem)
-        self.__main_loop(problem, checkpoint_file)
-        if len(self.__archive) > self.__archive_hard_limit:
-            self.__archive_clustering(problem)
-        self.__remove_infeasible(problem)
-        self.__print_statistics(problem)
-        self.duration = time.time() - self.duration
-
-    def minimize_from_checkpoint(self, problem, checkpoint_file = "checkpoint.json"):
-        self.__parameters_check()
-        self.__read_checkpoint(problem, checkpoint_file)
-        self.duration = time.time()
-        assert len(self.__archive) > 0, "Archive not initialized"
-        if len(self.__archive) > self.__archive_hard_limit:
-            self.__archive_clustering(problem)
-        self.__print_header(problem)
-        self.__print_statistics(problem)
-        self.__main_loop(problem, checkpoint_file)
-        if len(self.__archive) > self.__archive_hard_limit:
-            self.__archive_clustering(problem)
-        self.__remove_infeasible(problem)
-        self.__print_statistics(problem)
-        self.duration = time.time() - self.duration
-
-    def __main_loop(self, problem, checkpoint_file):
-        self.__save_checkpoint(checkpoint_file)
+    def __main_loop(self, problem):
         x = random.choice(self.__archive)
         while self.__current_temperature > self.__final_temperature:
             for _ in range(self.__annealing_iterations):
@@ -239,7 +236,7 @@ class AMOSA:
                     raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{x}\ny: {y}\n x < y: {AMOSA.dominates(x, y)}\n y < x: {AMOSA.dominates(y, x)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
             self.__n_eval += self.__annealing_iterations
             self.__print_statistics(problem)
-            self.__save_checkpoint(checkpoint_file)
+            self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
             self.__check_early_termination()
 
     def pareto_front(self):
@@ -252,9 +249,14 @@ class AMOSA:
         return np.array([s["g"] for s in self.__archive])
 
     def archive_to_json(self, json_file):
-        json_string = json.dumps(self.__archive)
-        with open(json_file, 'w') as outfile:
-            outfile.write(json_string)
+        try:
+            json_string = json.dumps(self.__archive)
+            with open(json_file, 'w') as outfile:
+                outfile.write(json_string)
+        except TypeError as e:
+            print(self.__archive)
+            print(e)
+            exit()
 
     def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = None):
         if axis_labels is None:
@@ -322,6 +324,17 @@ class AMOSA:
             if not any([AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in self.__archive]):
                 self.__archive.append(x)
 
+    def __initial_hill_climbing(self, problem, initial_candidate_solutions):
+        num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
+        padding = " " * 30
+        if self.__hill_climbing_iterations > 0:
+            for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
+                print(f"  Evaluating point #{i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
+                initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
+                self.__save_checkpoint_hillclimb(initial_candidate_solutions, self.hill_climb_checkpoint_file)
+        for x in initial_candidate_solutions:
+            self.__add_to_archive(x)
+
     def __archive_clustering(self, problem):
         if problem.num_of_constraints > 0:
             feasible = [s for s in self.__archive if all([g <= 0 for g in s["g"]])]
@@ -365,7 +378,7 @@ class AMOSA:
 
     def __compute_deltas(self):
         objectives = np.array([s["f"] for s in self.__archive])
-        if self.__nadir is None and self.__ideal is None and self.__old_norm_objectives is None:
+        if self.__nadir is None and self.__ideal is None and (self.__old_norm_objectives is None or len(self.__old_norm_objectives) == 0):
             self.__nadir = np.max(objectives, axis = 0)
             self.__ideal = np.min(objectives, axis = 0)
             self.__old_norm_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, self.__ideal, self.__nadir)] for x in objectives[:]])
@@ -397,30 +410,51 @@ class AMOSA:
             else:
                 self.__current_temperature *= self.__cooling_factor
 
-    def __save_checkpoint(self, file_name):
+    def __save_checkpoint_minimize(self, file_name):
         checkpoint = {
             "n_eval" : self.__n_eval,
             "t" : self.__current_temperature,
-            "ideal": self.__ideal.tolist(),
-            "nadir": self.__nadir.tolist(),
-            "norm": self.__old_norm_objectives.tolist(),
+            "ideal": self.__ideal.tolist() if self.__ideal is not None else "None",
+            "nadir": self.__nadir.tolist() if self.__nadir is not None else "None",
+            "norm": self.__old_norm_objectives if isinstance(self.__old_norm_objectives, (list, tuple)) else self.__old_norm_objectives.tolist(),
             "phy" : self.__phy,
             "arc" : self.__archive
         }
-        json_string = json.dumps(checkpoint)
-        with open(file_name, 'w') as outfile:
-            outfile.write(json_string)
+        try:
+            json_string = json.dumps(checkpoint)
+            with open(file_name, 'w') as outfile:
+                outfile.write(json_string)
+        except TypeError as e:
+            print(checkpoint)
+            print(e)
+            exit()
 
-    def __read_checkpoint(self, problem, checkpoint_file):
+    def __save_checkpoint_hillclimb(self, candidate_solutions, file_name):
+        try:
+            json_string = json.dumps(candidate_solutions)
+            with open(file_name, 'w') as outfile:
+                outfile.write(json_string)
+        except TypeError as e:
+            print(candidate_solutions)
+            print(e)
+            exit()
+
+    def __read_checkpoint_minimize(self, problem, checkpoint_file):
+        print("Resuming minimize from checkpoint...")
         checkpoint = json.load(open(checkpoint_file))
         self.__n_eval = int(checkpoint["n_eval"])
         self.__current_temperature = float(checkpoint["t"])
-        self.__ideal = [ float(i) for i in checkpoint["ideal"]]
-        self.__nadir = [ float (i) for i in checkpoint["nadir"]]
+        self.__ideal = [ float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
+        self.__nadir = [ float (i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
         self.__old_norm_objectives = checkpoint["norm"]
         self.__phy = [float(i) for i in checkpoint["phy"]]
         self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]
-        print("Resuming from checkpoint...")
+
+    def __read_checkpoint_hill_climb(self, problem, checkpoint_file):
+        print("Resuming hill-climbing from checkpoint...")
+        checkpoint = json.load(open(checkpoint_file))
+        return [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
+
 
     @staticmethod
     def inverted_generational_distance(P_t, P_tau):
