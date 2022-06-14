@@ -157,17 +157,17 @@ class AMOSA:
             initial_candidate = self.__read_checkpoint_hill_climb(problem, self.hill_climb_checkpoint_file)
             self.__initial_hill_climbing(problem, initial_candidate)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            if remove_checkpoints
+            if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
         elif improve is not None:
             self.__archive_from_json(problem, improve)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            if remove_checkpoints
+            if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
         else:
             self.__random_archive(problem)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            if remove_checkpoints
+            if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
         assert len(self.__archive) > 0, "Archive not initialized"
         self.__print_header(problem)
