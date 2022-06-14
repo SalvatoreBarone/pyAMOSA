@@ -99,6 +99,8 @@ class AMOSA:
         assert annealing_iterations > 0
         assert annealing_strength >= 1
         assert early_termination_window >= 0
+        self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
+        self.minimize_checkpoint_file = "minimize_checkpoint.json"
         self.__archive_hard_limit = archive_hard_limit
         self.__archive_soft_limit = archive_soft_limit
         self.__archive_gamma = archive_gamma
@@ -138,7 +140,7 @@ class AMOSA:
         self.__old_norm_objectives = []
         self.__phy = []
 
-    def run(self, problem, improve = None):
+    def run(self, problem, improve = None, remove_checkpoints = True):
         self.__parameters_check()
         self.__current_temperature = self.__initial_temperature
         self.__archive = []
@@ -155,15 +157,18 @@ class AMOSA:
             initial_candidate = self.__read_checkpoint_hill_climb(problem, self.hill_climb_checkpoint_file)
             self.__initial_hill_climbing(problem, initial_candidate)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            os.remove(self.hill_climb_checkpoint_file)
+            if remove_checkpoints
+                os.remove(self.hill_climb_checkpoint_file)
         elif improve is not None:
             self.__archive_from_json(problem, improve)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            os.remove(self.hill_climb_checkpoint_file)
+            if remove_checkpoints
+                os.remove(self.hill_climb_checkpoint_file)
         else:
             self.__random_archive(problem)
             self.__save_checkpoint_minimize(self.minimize_checkpoint_file)
-            os.remove(self.hill_climb_checkpoint_file)
+            if remove_checkpoints
+                os.remove(self.hill_climb_checkpoint_file)
         assert len(self.__archive) > 0, "Archive not initialized"
         self.__print_header(problem)
         self.__print_statistics(problem)
@@ -173,7 +178,8 @@ class AMOSA:
             self.__archive_clustering(problem)
         self.__print_statistics(problem)
         self.duration = time.time() - self.duration
-        os.remove(self.minimize_checkpoint_file)
+        if remove_checkpoints:
+            os.remove(self.minimize_checkpoint_file)
 
     def __random_archive(self, problem):
         print("Initializing random archive...")
