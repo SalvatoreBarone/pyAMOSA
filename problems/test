@@ -138,7 +138,7 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, rep
     config.early_terminator_window = win
     optimizer = AMOSA(config)
     optimizer.run(problem, json_file)
-    optimizer.save_results(problem, report)
+    optimizer.archive_to_csv(problem, report)
     optimizer.archive_to_json(results)
     optimizer.plot_pareto(problem, plotfile)
 
