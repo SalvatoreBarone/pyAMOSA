@@ -15,6 +15,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
+import json
 import os, sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from BNH import *
@@ -33,77 +34,29 @@ import click
 problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
 
 
-def plot_pareto_front(opts, pdf_file, fig_title ="Pareto front", axis_labels = None):
-    if axis_labels is None:
-        axis_labels = [ "f" + str(i) for i in range(len(opts[0]["f"]))]
-    F = np.array([s["f"] for s in opts])
-    if len(opts[0]["f"]) == 2:
-        plt.figure(figsize = (10, 10), dpi = 300)
-        plt.plot(F[:, 0], F[:, 1], 'k.')
-        plt.xlabel(axis_labels[0])
-        plt.ylabel(axis_labels[1])
-        plt.title(fig_title)
-        plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
-    elif len(opts[0]["f"]) == 3:
-        fig = plt.figure()
-        ax = fig.add_subplot(projection = '3d')
-        ax.set_xlabel(axis_labels[0])
-        ax.set_ylabel(axis_labels[1])
-        ax.set_zlabel(axis_labels[2])
-        plt.title(fig_title)
-        ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
-        plt.tight_layout()
-        plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
-
-
-def save_pareto_front(opts, csv_file):
-    original_stdout = sys.stdout
-    pareto_front = np.array([s["f"] for s in opts])
-    row_format = "{:};" * len(opts[0]["f"])
-    with open(csv_file, "w") as file:
-        sys.stdout = file
-        print(row_format.format(*[f"f{i}" for i in range(len(opts[0]["f"]))]))
-        for f in pareto_front:
-            print(row_format.format(*f))
-    sys.stdout = original_stdout
-
-
 @click.group()
 def cli():
     pass
 
 
-@cli.command('optimums')
+@cli.command('evaluate')
 @click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
-@click.option('--csvfile', type = str, required = False, default = "pareto_front.csv", help = 'Output csv file for the Pareto-front')
-@click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
-def optimums(prob, csvfile, plotfile):
-    """ Get the actual Pareto front for a given test problem """
+def evaluate(prob):
     problem = problems[prob]
     opt = problem.optimums()
-    save_pareto_front(opt, csvfile)
-    plot_pareto_front(opt, plotfile)
-
-
-@cli.command('compare')
-@click.option('-r', type = str, required = True, help = 'Path of the real Pareto-front csv')
-@click.option('-e', type = str, required = True, help = 'Path of the estimation of the Pareto-front csv')
-@click.option('-o', '--output', type = str, required = True, help = 'File name of the output plot')
-def compare(real_pareto_csv, estimation_csv, out_pdf_file):
-    """ Compares the actual Pareto front with an estimation provided by the AMOSA """
-    real_pareto = np.genfromtxt(real_pareto_csv, delimiter=';', usecols=(0, 1), skip_header=1)
-    estimation = np.genfromtxt(estimation_csv, delimiter=';', usecols=(0, 1), skip_header=1)
-    axis_labels = ["f0", "f1", "f2"]
-    real_pareto = np.array([s["f"] for s in real_pareto])
+    archive = json.load(open(f"{prob}_final_archive.json"))
+    real_pareto = np.array([s["f"] for s in opt])
+    est_pareto = np.array([s["f"] for s in archive])
+    axis_labels = ["f0", "f1"]
     plt.figure(figsize = (10, 10), dpi = 300)
-    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label="real pareto")
-    plt.plot(estimation[:, 0], estimation[:, 1], 'b.', label="high effort")
+    plt.plot(real_pareto[:, 0], real_pareto[:, 1], 'r.', label="Actual Pareto-front")
+    plt.plot(est_pareto[:, 0], est_pareto[:, 1], 'b.', label="Estimation from AMOSA")
     plt.xlabel(axis_labels[0])
     plt.ylabel(axis_labels[1])
     plt.legend()
-    plt.savefig(out_pdf_file, bbox_inches = 'tight', pad_inches = 0)
-    print(f"convergence: {convergence(real_pareto, estimation)}")
-    print(f"dispersion: {dispersion(real_pareto, estimation)}")
+    plt.savefig(f"{prob}_pareto_comparison.pdf", bbox_inches = 'tight', pad_inches = 0)
+    print(f"convergence: {convergence(real_pareto, est_pareto)}")
+    print(f"dispersion: {dispersion(real_pareto, est_pareto)}")
 
 
 @cli.command('run')
@@ -118,17 +71,15 @@ def compare(real_pareto_csv, estimation_csv, out_pdf_file):
 @click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
 @click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
-@click.option('--report', type = str, required = False, default = "report.csv", help = 'Report file')
-@click.option('--results', type = str, required = False, default = "archive.json", help = 'Output json file')
-@click.option('--plotfile', type = str, required = False, default = "pareto_front.pdf", help = 'Output plot of the Pareto-front')
 @click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, report, results, plotfile, json_file):
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file):
     """ Run a test problem """
     problem = problems[prob]
     config = AMOSAConfig
     config.archive_hard_limit = hard
     config.archive_soft_limit = soft
     config.archive_gamma = gamma
+    config.clustering_max_iterations = 300
     config.hill_climbing_iterations = climb
     config.initial_temperature = itemp
     config.final_temperature = ftemp
@@ -137,14 +88,15 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, rep
     config.annealing_strength = strg
     config.early_terminator_window = win
     optimizer = AMOSA(config)
+    optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
+    optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
     optimizer.run(problem, json_file)
-    optimizer.archive_to_csv(problem, report)
-    optimizer.archive_to_json(results)
-    optimizer.plot_pareto(problem, plotfile)
+    optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
+    optimizer.archive_to_json(f"{prob}_final_archive.json")
+    optimizer.plot_pareto(problem, f"{prob}_pareto_front.pdf")
 
 
-cli.add_command(optimums)
-cli.add_command(compare)
+cli.add_command(evaluate)
 cli.add_command(run)
 
 

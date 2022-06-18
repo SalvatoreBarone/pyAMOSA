@@ -26,6 +26,7 @@ class AMOSAConfig:
 			archive_hard_limit = 20,
 			archive_soft_limit = 50,
 			archive_gamma = 2,
+			clustering_max_iterations = 300,
 			hill_climbing_iterations = 500,
 			initial_temperature = 500,
 			final_temperature = 0.000001,
@@ -36,6 +37,7 @@ class AMOSAConfig:
 	):
 		assert archive_soft_limit >= archive_hard_limit > 0
 		assert archive_gamma > 0
+		assert clustering_max_iterations > 0
 		assert hill_climbing_iterations >= 0
 		assert initial_temperature > final_temperature > 0
 		assert 0 < cooling_factor < 1
@@ -44,6 +46,7 @@ class AMOSAConfig:
 		assert early_termination_window >= 0
 		self.archive_hard_limit = archive_hard_limit
 		self.archive_soft_limit = archive_soft_limit
+		self.clustering_max_iterations = clustering_max_iterations
 		self.archive_gamma = archive_gamma
 		self.hill_climbing_iterations = hill_climbing_iterations
 		self.initial_temperature = initial_temperature
@@ -100,11 +103,19 @@ class AMOSA:
 		if x["g"] is None:
 			return all(i <= j for i, j in zip(x["f"], y["f"])) and any(i < j for i, j in zip(x["f"], y["f"]))
 		else:
-			return ((all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])) or  # x is feasible while y is not
-			        (any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([i <= j for i, j in zip(x["g"], y["g"])]) and any([i < j for i, j in zip(
-				        x["g"], y["g"])])) or  # x and y are both infeasible, but x has a lower constraint violation
-			        (all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([i <= j for i, j in zip(x["f"], y["f"])]) and any([i < j for i, j in zip(
-				        x["f"], y["f"])])))  # both are feasible, but x dominates y in the usual sense
+			return AMOSA.x_is_feasible_while_y_is_nor(x, y) or AMOSA.both_infeasible_but_x_is_better(x, y) or AMOSA.both_feasible_but_x_is_better(x, y)
+
+	@staticmethod
+	def x_is_feasible_while_y_is_nor(x, y):
+		return all(i <= 0 for i in x["f"]) and any(i > 0 for i in y["g"])
+
+	@staticmethod
+	def both_infeasible_but_x_is_better(x, y):
+		return any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([i <= j for i, j in zip(x["g"], y["g"])]) and any([i < j for i, j in zip(x["g"], y["g"])])
+
+	@staticmethod
+	def both_feasible_but_x_is_better(x, y):
+		return all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([i <= j for i, j in zip(x["f"], y["f"])]) and any([i < j for i, j in zip(x["f"], y["f"])])
 
 	@staticmethod
 	def lower_point(problem):
@@ -120,7 +131,7 @@ class AMOSA:
 
 	@staticmethod
 	def random_point(problem):
-		x = {"x": [l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u) for l, u, t in zip(problem.lower_bound, problem.upper_bound, problem.types)], "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+		x = {"x": [lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub) for lb, ub, tp in zip(problem.lower_bound, problem.upper_bound, problem.types)], "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
 		AMOSA.get_objectives(problem, x)
 		return x
 
@@ -129,10 +140,10 @@ class AMOSA:
 		z = copy.deepcopy(s)
 		indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
 		for i in indexes:
-			l = problem.lower_bound[i]
-			u = problem.upper_bound[i]
-			t = problem.types[i]
-			z["x"][i] = l if l == u else random.randrange(l, u) if t == AMOSA.Type.INTEGER else random.uniform(l, u)
+			lb = problem.lower_bound[i]
+			ub = problem.upper_bound[i]
+			tp = problem.types[i]
+			z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub)
 		AMOSA.get_objectives(problem, z)
 		return z
 
@@ -194,6 +205,17 @@ class AMOSA:
 		AMOSA.get_objectives(problem, s)
 
 	@staticmethod
+	def add_to_archive(archive, x):
+		if len(archive) == 0:
+			archive.append(x)
+		else:
+			for y in archive:
+				if AMOSA.dominates(x, y):
+					archive.remove(y)
+			if not any([AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in archive]):
+				archive.append(x)
+
+	@staticmethod
 	def compute_cv(archive):
 		g = np.array([s["g"] for s in archive])
 		feasible = np.all(np.less(g, 0), axis = 1).sum()
@@ -207,25 +229,71 @@ class AMOSA:
 		return archive
 
 	@staticmethod
-	def do_clustering(archive, hard_limit):
-		while len(archive) > hard_limit:
-			d = np.array([[np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) if not np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.nan for j in archive] for i in archive])
-			try:
-				i_min = np.nanargmin(d)
-				r = int(i_min / len(archive))
-				c = i_min % len(archive)
-				del archive[r if np.where(d[r] == np.nanmin(d[r]))[0].size > np.where(d[c] == np.nanmin(d[c]))[0].size else c]
-			except:
-				return
+	def clustering(archive, problem, hard_limit, max_iterations):
+		if problem.num_of_constraints > 0:
+			feasible = [s for s in archive if all([g <= 0 for g in s["g"]])]
+			unfeasible = [s for s in archive if any([g > 0 for g in s["g"]])]
+			if len(feasible) > hard_limit:
+				return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations)
+			elif len(feasible) < hard_limit and len(unfeasible) != 0:
+				return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations)
+			else:
+				return feasible
+		else:
+			return AMOSA.kmeans_clustering(archive, hard_limit, max_iterations)
 
 	@staticmethod
-	def inverted_generational_distance(P_t, P_tau):
-		return sum([np.min([np.linalg.norm(p - q) for q in P_t[:]]) for p in P_tau[:]]) / len(P_tau)
+	def centroid_of_set(input_set):
+		d = np.array([np.nansum([np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) if not np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.nan for j in input_set]) for i in input_set])
+		return input_set[np.nanargmin(d)]
+
+	@staticmethod
+	def kmeans_clustering(archive, num_of_clusters, max_iterations):
+		assert max_iterations > 0
+		if num_of_clusters > 1:
+			# Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
+			# then the rest are initialized w/ probabilities proportional to their distances to the first
+			# Pick a random point from train data for first centroid
+			centroids = [random.choice(archive)]
+			AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
+			for n in range(num_of_clusters - 1):
+				# Calculate normalized distances from points to the centroids
+				dists = [np.sum([np.linalg.norm(np.array(centroid["f"])- np.array(p["f"])) for centroid in centroids]) for p in archive]
+				dists /= np.sum(dists)
+				# Choose remaining points based on their distances
+				new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = dists)[0]  # Indexed @ zero to get val, not array of val
+				centroids += [archive[new_centroid_idx]]
+				AMOSA.print_progressbar(n, num_of_clusters, message = "Clustering (centroids):")
+			# Iterate, adjusting centroids until converged or until passed max_iter
+			AMOSA.print_progressbar(0, max_iterations, message = "Clustering (kmeans):")
+			for n in range(max_iterations):
+				# Sort each datapoint, assigning to nearest centroid
+				sorted_points = [[] for _ in range(num_of_clusters)]
+				for x in archive:
+					dists = [np.linalg.norm(np.array(x["f"]) - np.array(centroid["f"])) for centroid in centroids]
+					centroid_idx = np.argmin(dists)
+					sorted_points[centroid_idx].append(x)
+				# Push current centroids to previous, reassign centroids as mean of the points belonging to them
+				prev_centroids = centroids
+				centroids = [AMOSA.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
+				AMOSA.print_progressbar(n, max_iterations, message = "Clustering (kmeans):")
+				if np.array_equal(centroids, prev_centroids):
+					AMOSA.print_progressbar(max_iterations-1, max_iterations, message = "Clustering (kmeans):")
+					break
+			print("", end = "\r", flush = True)
+			return centroids
+		else:
+			return [AMOSA.centroid_of_set(archive)]
+
+	@staticmethod
+	def inverted_generational_distance(p_t, p_tau):
+		return sum([np.min([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
 
 	def __init__(self, config):
 		self.__archive_hard_limit = config.archive_hard_limit
 		self.__archive_soft_limit = config.archive_soft_limit
 		self.__archive_gamma = config.archive_gamma
+		self.__clustering_max_iterations = config.clustering_max_iterations
 		self.__hill_climbing_iterations = config.hill_climbing_iterations
 		self.__initial_temperature = config.initial_temperature
 		self.__final_temperature = config.final_temperature
@@ -259,11 +327,15 @@ class AMOSA:
 		elif os.path.exists(self.hill_climb_checkpoint_file):
 			initial_candidate = self.__read_checkpoint_hill_climb(problem)
 			self.__initial_hill_climbing(problem, initial_candidate)
+			if len(self.__archive) > self.__archive_hard_limit:
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
 			self.__save_checkpoint_minimize()
 			if remove_checkpoints:
 				os.remove(self.hill_climb_checkpoint_file)
 		elif improve is not None:
 			self.__archive_from_json(problem, improve)
+			if len(self.__archive) > self.__archive_hard_limit:
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
 			self.__save_checkpoint_minimize()
 			if remove_checkpoints:
 				os.remove(self.hill_climb_checkpoint_file)
@@ -278,7 +350,7 @@ class AMOSA:
 		self.__main_loop(problem)
 		self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
 		if len(self.__archive) > self.__archive_hard_limit:
-			self.__archive_clustering(problem)
+			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
 		self.__print_statistics(problem)
 		self.duration = time.time() - self.duration
 		if remove_checkpoints:
@@ -295,7 +367,7 @@ class AMOSA:
 
 	def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = None):
 		if axis_labels is None:
-			axis_labels = [ "f" + str(i) for i in range(problem.num_of_objectives)]
+			axis_labels = ["f" + str(i) for i in range(problem.num_of_objectives)]
 		F = self.pareto_front()
 		if problem.num_of_objectives == 2:
 			plt.figure(figsize = (10, 10), dpi = 300)
@@ -334,14 +406,6 @@ class AMOSA:
 				print(row_format.format(*f, *x))
 		sys.stdout = original_stdout
 
-	def __add_to_archive(self, x):
-		if len(self.__archive) == 0:
-			self.__archive.append(x)
-		else:
-			self.__archive = [y for y in self.__archive if not AMOSA.dominates(x, y)]
-			if not any([AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in self.__archive]):
-				self.__archive.append(x)
-
 	def __random_archive(self, problem):
 		print("Initializing random archive...")
 		initial_candidate_solutions = [AMOSA.lower_point(problem), AMOSA.upper_point(problem)]
@@ -355,66 +419,61 @@ class AMOSA:
 
 	def __initial_hill_climbing(self, problem, initial_candidate_solutions):
 		num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
-		padding = " " * 30
 		if self.__hill_climbing_iterations > 0:
+			AMOSA.print_progressbar(0, num_of_initial_candidate_solutions, message = "Hill climbing:")
 			for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
-				print(f"  Evaluating point #{i + 1}/{num_of_initial_candidate_solutions}{padding}", end = "\r", flush = True)
 				initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
 				self.__save_checkpoint_hillclimb(initial_candidate_solutions)
+				AMOSA.print_progressbar(i+1, num_of_initial_candidate_solutions, message = "Hill climbing:")
 		for x in initial_candidate_solutions:
-			self.__add_to_archive(x)
-
-	def __archive_clustering(self, problem):
-		if problem.num_of_constraints > 0:
-			feasible = [s for s in self.__archive if all([g <= 0 for g in s["g"]])]
-			non_feasible = [s for s in self.__archive if all([g > 0 for g in s["g"]])]
-			if len(feasible) > self.__archive_hard_limit:
-				AMOSA.do_clustering(feasible, self.__archive_hard_limit)
-				self.__archive = feasible
-			else:
-				AMOSA.do_clustering(non_feasible, self.__archive_hard_limit - len(feasible))
-				self.__archive = non_feasible + feasible
-		else:
-			AMOSA.do_clustering(self.__archive, self.__archive_hard_limit)
+			AMOSA.add_to_archive(self.__archive, x)
 
 	def __main_loop(self, problem):
 		current_point = random.choice(self.__archive)
 		while self.__current_temperature > self.__final_temperature:
-			for _ in range(self.__annealing_iterations):
-				new_point = AMOSA.random_perturbation(problem, current_point, self.__annealing_strength)
-				fitness_range = AMOSA.compute_fitness_range(self.__archive, current_point, new_point)
-				s_dominating_y = [s for s in self.__archive if AMOSA.dominates(s, new_point)]
-				s_dominated_by_y = [s for s in self.__archive if AMOSA.dominates(new_point, s)]
-				k_s_dominated_by_y = len(s_dominated_by_y)
-				k_s_dominating_y = len(s_dominating_y)
-				if AMOSA.dominates(current_point, new_point) and k_s_dominating_y >= 0:
-					delta_avg = (sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
-					if AMOSA.accept(AMOSA.sigmoid(-delta_avg * self.__current_temperature)):
-						current_point = new_point
-				elif not AMOSA.dominates(current_point, new_point) and not AMOSA.dominates(new_point, current_point):
-					if k_s_dominating_y >= 1:
-						delta_avg = sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
-						if AMOSA.accept(AMOSA.sigmoid(-delta_avg * self.__current_temperature)):
-							current_point = new_point
-					elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
-						self.__add_to_archive(new_point)
-						current_point = new_point
-				elif AMOSA.dominates(new_point, current_point):
-					if k_s_dominating_y >= 1:
-						delta_dom = [AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
-						if AMOSA.accept(AMOSA.sigmoid(min(delta_dom))):
-							current_point = self.__archive[np.argmin(delta_dom)]
-					elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
-						self.__add_to_archive(new_point)
-						current_point = new_point
-				else:
-					raise RuntimeError(f"Something went wrong\narchive: {self.__archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
+			AMOSA.thread_loop(problem, self.__archive, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, current_point)
+			self.__print_statistics(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
-				self.__archive_clustering(problem)
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
 			self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
 			self.__check_early_termination()
+
+	@staticmethod
+	def thread_loop(problem, archive, current_temperature, annealing_iterations, annealing_strength, current_point):
+		AMOSA.print_progressbar(0, annealing_iterations, message = "Annealing:")
+		for iter in range(annealing_iterations):
+			new_point = AMOSA.random_perturbation(problem, current_point, annealing_strength)
+			fitness_range = AMOSA.compute_fitness_range(archive, current_point, new_point)
+			s_dominating_y = [s for s in archive if AMOSA.dominates(s, new_point)]
+			s_dominated_by_y = [s for s in archive if AMOSA.dominates(new_point, s)]
+			k_s_dominated_by_y = len(s_dominated_by_y)
+			k_s_dominating_y = len(s_dominating_y)
+			if AMOSA.dominates(current_point, new_point) and k_s_dominating_y >= 0:
+				delta_avg = (sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (
+							k_s_dominating_y + 1)
+				if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
+					current_point = new_point
+			elif not AMOSA.dominates(current_point, new_point) and not AMOSA.dominates(new_point, current_point):
+				if k_s_dominating_y >= 1:
+					delta_avg = sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
+					if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
+						current_point = new_point
+				elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
+					AMOSA.add_to_archive(archive, new_point)
+					current_point = new_point
+			elif AMOSA.dominates(new_point, current_point):
+				if k_s_dominating_y >= 1:
+					delta_dom = [AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
+					if AMOSA.accept(AMOSA.sigmoid(min(delta_dom))):
+						current_point = archive[np.argmin(delta_dom)]
+				elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
+					AMOSA.add_to_archive(archive, new_point)
+					current_point = new_point
+			else:
+				raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
+			AMOSA.print_progressbar(iter+1, annealing_iterations, message = "Annealing:")
 
 	@staticmethod
 	def print_header(problem):
@@ -426,6 +485,12 @@ class AMOSA:
 			print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 			print("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
 			print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+
+	@staticmethod
+	def print_progressbar(current, total, precision = 5, message = ""):
+		progress = current * 100 // total // precision
+		remaining = (100 // precision) - progress
+		print(f"   {message} [{'#' * progress}{' ' * remaining}] {progress * precision}% {' ' * 30}", end = "\r", flush = True)
 
 	def __compute_deltas(self):
 		objectives = np.array([s["f"] for s in self.__archive])
@@ -464,13 +529,13 @@ class AMOSA:
 
 	def __save_checkpoint_minimize(self):
 		checkpoint = {
-			"n_eval" : self.__n_eval,
-			"t" : self.__current_temperature,
+			"n_eval": self.__n_eval,
+			"t": self.__current_temperature,
 			"ideal": self.__ideal.tolist() if self.__ideal is not None else "None",
 			"nadir": self.__nadir.tolist() if self.__nadir is not None else "None",
 			"norm": self.__old_norm_objectives if isinstance(self.__old_norm_objectives, (list, tuple)) else self.__old_norm_objectives.tolist(),
-			"phy" : self.__phy,
-			"arc" : self.__archive
+			"phy": self.__phy,
+			"arc": self.__archive
 		}
 		try:
 			json_string = json.dumps(checkpoint)
@@ -496,8 +561,8 @@ class AMOSA:
 		checkpoint = json.load(open(self.minimize_checkpoint_file))
 		self.__n_eval = int(checkpoint["n_eval"])
 		self.__current_temperature = float(checkpoint["t"])
-		self.__ideal = [ float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
-		self.__nadir = [ float (i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
+		self.__ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
+		self.__nadir = [float(i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
 		self.__old_norm_objectives = checkpoint["norm"]
 		self.__phy = [float(i) for i in checkpoint["phy"]]
 		self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]
@@ -506,4 +571,3 @@ class AMOSA:
 		print("Resuming hill-climbing from checkpoint...")
 		checkpoint = json.load(open(self.hill_climb_checkpoint_file))
 		return [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
-

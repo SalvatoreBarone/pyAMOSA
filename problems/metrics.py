@@ -32,4 +32,4 @@ def convergence(R_star, R):
 
 
 def dispersion(R_star, R):
-    sum([min([np.linalg.norm(r - r_star) for r in R]) for r_star in R_star]) / len(R_star)
+    return sum([min([np.linalg.norm(r - r_star) for r in R]) for r_star in R_star]) / len(R_star)
