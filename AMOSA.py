@@ -18,6 +18,7 @@ import sys, copy, random, time, os, json
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
+from multiprocessing import cpu_count, Pool
 
 
 class AMOSAConfig:
@@ -421,17 +422,24 @@ class AMOSA:
 		num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
 		if self.__hill_climbing_iterations > 0:
 			AMOSA.print_progressbar(0, num_of_initial_candidate_solutions, message = "Hill climbing:")
-			for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
-				initial_candidate_solutions.append(AMOSA.hill_climbing(problem, AMOSA.random_point(problem), self.__hill_climbing_iterations))
+			args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
+			for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count()):
+				with Pool(cpu_count()) as pool:
+					new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
+				initial_candidate_solutions += new_points
 				self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-				AMOSA.print_progressbar(i+1, num_of_initial_candidate_solutions, message = "Hill climbing:")
+				AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
 		for x in initial_candidate_solutions:
 			AMOSA.add_to_archive(self.__archive, x)
+
+	@staticmethod
+	def hillclimb_thread_loop(problem, hillclimb_iterations):
+		return AMOSA.hill_climbing(problem, AMOSA.random_point(problem), hillclimb_iterations)
 
 	def __main_loop(self, problem):
 		current_point = random.choice(self.__archive)
 		while self.__current_temperature > self.__final_temperature:
-			AMOSA.thread_loop(problem, self.__archive, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, current_point)
+			AMOSA.annealing_thread_loop(problem, self.__archive, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, current_point)
 			self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
@@ -441,7 +449,7 @@ class AMOSA:
 			self.__check_early_termination()
 
 	@staticmethod
-	def thread_loop(problem, archive, current_temperature, annealing_iterations, annealing_strength, current_point):
+	def annealing_thread_loop(problem, archive, current_temperature, annealing_iterations, annealing_strength, current_point):
 		AMOSA.print_progressbar(0, annealing_iterations, message = "Annealing:")
 		for iter in range(annealing_iterations):
 			new_point = AMOSA.random_perturbation(problem, current_point, annealing_strength)
