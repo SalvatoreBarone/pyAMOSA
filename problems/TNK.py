@@ -31,3 +31,16 @@ class TNK(AMOSA.Problem):
         out["f"] = [f1, f2 ]
         out["g"] = [g1, g2]
 
+    def optimums(self):
+        set1 = np.linspace(1e-6, np.pi, 100)
+        set2 = np.linspace(1e-6, np.pi, 100)
+        out = []
+        for x1 in set1:
+            for x2 in set2:
+                if ((1 + 0.1 * np.cos(16 * np.arctan(x1 / x2)) - x1 ** 2 - x2 ** 2) <= 0) and (((x1 - 0.5) ** 2 + (x2 - 0.5) ** 2 - 0.5) <= 0):
+                    out.append({"x": [x1, x2], "f": [0] * self.num_of_objectives, "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None})
+        for o in out:
+            self.evaluate(o["x"], o)
+        return out
+
+

@@ -432,11 +432,11 @@ class AMOSA:
 		current_point = random.choice(self.__archive)
 		while self.__current_temperature > self.__final_temperature:
 			AMOSA.thread_loop(problem, self.__archive, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, current_point)
+			self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
-			self.__n_eval += self.__annealing_iterations
-			self.__print_statistics(problem)
+				self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
 			self.__check_early_termination()
 
@@ -451,8 +451,7 @@ class AMOSA:
 			k_s_dominated_by_y = len(s_dominated_by_y)
 			k_s_dominating_y = len(s_dominating_y)
 			if AMOSA.dominates(current_point, new_point) and k_s_dominating_y >= 0:
-				delta_avg = (sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (
-							k_s_dominating_y + 1)
+				delta_avg = (sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
 				if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
 					current_point = new_point
 			elif not AMOSA.dominates(current_point, new_point) and not AMOSA.dominates(new_point, current_point):
