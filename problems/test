@@ -87,6 +87,7 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     config.annealing_iterations = iter
     config.annealing_strength = strg
     config.early_terminator_window = win
+    config.multiprocessing_enabled = True
     optimizer = AMOSA(config)
     optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
     optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"

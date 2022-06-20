@@ -34,17 +34,18 @@ class AMOSAConfig:
 			cooling_factor = 0.9,
 			annealing_iterations = 500,
 			annealing_strength = 1,
-			early_termination_window = 0
+			early_termination_window = 0,
+			multiprocessing_enabled = True
 	):
-		assert archive_soft_limit >= archive_hard_limit > 0
-		assert archive_gamma > 0
-		assert clustering_max_iterations > 0
-		assert hill_climbing_iterations >= 0
-		assert initial_temperature > final_temperature > 0
-		assert 0 < cooling_factor < 1
-		assert annealing_iterations > 0
-		assert annealing_strength >= 1
-		assert early_termination_window >= 0
+		assert archive_soft_limit >= archive_hard_limit > 0, f"soft limit: {archive_soft_limit}, hard limit: {archive_hard_limit}"
+		assert archive_gamma > 0, f"gamma: {archive_gamma}"
+		assert clustering_max_iterations > 0, f"clustering iterations: {clustering_max_iterations}"
+		assert hill_climbing_iterations >= 0, f"hill-climbing iterations: {hill_climbing_iterations}"
+		assert initial_temperature > final_temperature > 0, f"initial temperature: {initial_temperature}, final temperature: {final_temperature}"
+		assert 0 < cooling_factor < 1, f"cooling factor: {cooling_factor}"
+		assert annealing_iterations > 0, f"annealing iterations: {annealing_strength}"
+		assert annealing_strength >= 1, f"annealing strength: {annealing_strength}"
+		assert early_termination_window >= 0, f"early-termination window: {early_termination_window}"
 		self.archive_hard_limit = archive_hard_limit
 		self.archive_soft_limit = archive_soft_limit
 		self.clustering_max_iterations = clustering_max_iterations
@@ -56,6 +57,7 @@ class AMOSAConfig:
 		self.annealing_iterations = annealing_iterations
 		self.annealing_strength = annealing_strength
 		self.early_terminator_window = early_termination_window
+		self.multiprocessing_enabled = multiprocessing_enabled
 
 
 class AMOSA:
@@ -217,6 +219,16 @@ class AMOSA:
 				archive.append(x)
 
 	@staticmethod
+	def nondominated_merge(archives):
+		nondominated_archive = []
+		AMOSA.print_progressbar(0, len(archives), message = "Merging archives:")
+		for i, archive in enumerate(archives):
+			for x in archive:
+				AMOSA.add_to_archive(nondominated_archive, x)
+			AMOSA.print_progressbar(i+1, len(archives), message = "Merging archives:")
+		return nondominated_archive
+
+	@staticmethod
 	def compute_cv(archive):
 		g = np.array([s["g"] for s in archive])
 		feasible = np.all(np.less(g, 0), axis = 1).sum()
@@ -230,18 +242,18 @@ class AMOSA:
 		return archive
 
 	@staticmethod
-	def clustering(archive, problem, hard_limit, max_iterations):
+	def clustering(archive, problem, hard_limit, max_iterations, print_allowed):
 		if problem.num_of_constraints > 0:
 			feasible = [s for s in archive if all([g <= 0 for g in s["g"]])]
 			unfeasible = [s for s in archive if any([g > 0 for g in s["g"]])]
 			if len(feasible) > hard_limit:
-				return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations)
+				return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations, print_allowed)
 			elif len(feasible) < hard_limit and len(unfeasible) != 0:
-				return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations)
+				return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations, print_allowed)
 			else:
 				return feasible
 		else:
-			return AMOSA.kmeans_clustering(archive, hard_limit, max_iterations)
+			return AMOSA.kmeans_clustering(archive, hard_limit, max_iterations, print_allowed)
 
 	@staticmethod
 	def centroid_of_set(input_set):
@@ -249,14 +261,15 @@ class AMOSA:
 		return input_set[np.nanargmin(d)]
 
 	@staticmethod
-	def kmeans_clustering(archive, num_of_clusters, max_iterations):
+	def kmeans_clustering(archive, num_of_clusters, max_iterations, print_allowed):
 		assert max_iterations > 0
 		if num_of_clusters > 1:
 			# Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
 			# then the rest are initialized w/ probabilities proportional to their distances to the first
 			# Pick a random point from train data for first centroid
 			centroids = [random.choice(archive)]
-			AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
+			if print_allowed:
+				AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
 			for n in range(num_of_clusters - 1):
 				# Calculate normalized distances from points to the centroids
 				dists = [np.sum([np.linalg.norm(np.array(centroid["f"])- np.array(p["f"])) for centroid in centroids]) for p in archive]
@@ -264,9 +277,11 @@ class AMOSA:
 				# Choose remaining points based on their distances
 				new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = dists)[0]  # Indexed @ zero to get val, not array of val
 				centroids += [archive[new_centroid_idx]]
-				AMOSA.print_progressbar(n, num_of_clusters, message = "Clustering (centroids):")
+				if print_allowed:
+					AMOSA.print_progressbar(n, num_of_clusters, message = "Clustering (centroids):")
 			# Iterate, adjusting centroids until converged or until passed max_iter
-			AMOSA.print_progressbar(0, max_iterations, message = "Clustering (kmeans):")
+			if print_allowed:
+				AMOSA.print_progressbar(0, max_iterations, message = "Clustering (kmeans):")
 			for n in range(max_iterations):
 				# Sort each datapoint, assigning to nearest centroid
 				sorted_points = [[] for _ in range(num_of_clusters)]
@@ -277,8 +292,9 @@ class AMOSA:
 				# Push current centroids to previous, reassign centroids as mean of the points belonging to them
 				prev_centroids = centroids
 				centroids = [AMOSA.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
-				AMOSA.print_progressbar(n, max_iterations, message = "Clustering (kmeans):")
-				if np.array_equal(centroids, prev_centroids):
+				if print_allowed:
+					AMOSA.print_progressbar(n, max_iterations, message = "Clustering (kmeans):")
+				if np.array_equal(centroids, prev_centroids) and print_allowed:
 					AMOSA.print_progressbar(max_iterations-1, max_iterations, message = "Clustering (kmeans):")
 					break
 			print("", end = "\r", flush = True)
@@ -302,6 +318,7 @@ class AMOSA:
 		self.__annealing_iterations = config.annealing_iterations
 		self.__annealing_strength = config.annealing_strength
 		self.__early_termination_window = config.early_terminator_window
+		self.__multiprocessing_enables = config.multiprocessing_enabled
 		self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 		self.minimize_checkpoint_file = "minimize_checkpoint.json"
 		self.__current_temperature = 0
@@ -351,7 +368,7 @@ class AMOSA:
 		self.__main_loop(problem)
 		self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
 		if len(self.__archive) > self.__archive_hard_limit:
-			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
+			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 		self.__print_statistics(problem)
 		self.duration = time.time() - self.duration
 		if remove_checkpoints:
@@ -422,13 +439,19 @@ class AMOSA:
 		num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
 		if self.__hill_climbing_iterations > 0:
 			AMOSA.print_progressbar(0, num_of_initial_candidate_solutions, message = "Hill climbing:")
-			args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
-			for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count()):
-				with Pool(cpu_count()) as pool:
-					new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
-				initial_candidate_solutions += new_points
-				self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-				AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
+			if self.__multiprocessing_enables:
+				args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
+				for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count()):
+					with Pool(cpu_count()) as pool:
+						new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
+					initial_candidate_solutions += new_points
+					self.__save_checkpoint_hillclimb(initial_candidate_solutions)
+					AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = f"Hill climbing:")
+			else:
+				for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
+					initial_candidate_solutions.append(AMOSA.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
+					self.__save_checkpoint_hillclimb(initial_candidate_solutions)
+					AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
 		for x in initial_candidate_solutions:
 			AMOSA.add_to_archive(self.__archive, x)
 
@@ -439,18 +462,26 @@ class AMOSA:
 	def __main_loop(self, problem):
 		current_point = random.choice(self.__archive)
 		while self.__current_temperature > self.__final_temperature:
-			AMOSA.annealing_thread_loop(problem, self.__archive, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, current_point)
-			self.__n_eval += self.__annealing_iterations
+			if self.__multiprocessing_enables:
+				args = [[problem, self.__archive.copy(), random.choice(self.__archive), self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, True, i] for i in [t == 0 for t in range(cpu_count())]]
+				with Pool(cpu_count()) as pool:
+					archives = pool.starmap(AMOSA.annealing_thread_loop, args)
+				self.__archive = AMOSA.nondominated_merge(archives)
+				self.__n_eval += self.__annealing_iterations * cpu_count()
+			else:
+				self.__archive = AMOSA.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive, self.__clustering_max_iterations, False, True)
+				self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
-				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 				self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
 			self.__check_early_termination()
 
 	@staticmethod
-	def annealing_thread_loop(problem, archive, current_temperature, annealing_iterations, annealing_strength, current_point):
-		AMOSA.print_progressbar(0, annealing_iterations, message = "Annealing:")
+	def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
+		if print_allowed:
+			AMOSA.print_progressbar(0, annealing_iterations, message = "Annealing:")
 		for iter in range(annealing_iterations):
 			new_point = AMOSA.random_perturbation(problem, current_point, annealing_strength)
 			fitness_range = AMOSA.compute_fitness_range(archive, current_point, new_point)
@@ -470,6 +501,8 @@ class AMOSA:
 				elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
 					AMOSA.add_to_archive(archive, new_point)
 					current_point = new_point
+					if len(archive) > soft_limit:
+						archive = AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
 			elif AMOSA.dominates(new_point, current_point):
 				if k_s_dominating_y >= 1:
 					delta_dom = [AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
@@ -478,9 +511,13 @@ class AMOSA:
 				elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
 					AMOSA.add_to_archive(archive, new_point)
 					current_point = new_point
+					if len(archive) > soft_limit:
+						archive = AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
 			else:
 				raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-			AMOSA.print_progressbar(iter+1, annealing_iterations, message = "Annealing:")
+			if print_allowed:
+				AMOSA.print_progressbar(iter+1, annealing_iterations, message = "Annealing:")
+		return archive if not clustering_before_return else AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
 
 	@staticmethod
 	def print_header(problem):
