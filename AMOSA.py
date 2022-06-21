@@ -469,7 +469,7 @@ class AMOSA:
 				self.__archive = AMOSA.nondominated_merge(archives)
 				self.__n_eval += self.__annealing_iterations * cpu_count()
 			else:
-				self.__archive = AMOSA.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive, self.__clustering_max_iterations, False, True)
+				self.__archive = AMOSA.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, False, True)
 				self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
