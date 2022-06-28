@@ -438,7 +438,7 @@ class AMOSA:
 	def __initial_hill_climbing(self, problem, initial_candidate_solutions):
 		num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
 		if self.__hill_climbing_iterations > 0:
-			AMOSA.print_progressbar(0, num_of_initial_candidate_solutions, message = "Hill climbing:")
+			AMOSA.print_progressbar(len(initial_candidate_solutions), num_of_initial_candidate_solutions, message = "Hill climbing:")
 			if self.__multiprocessing_enables:
 				args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
 				for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count()):
