@@ -531,10 +531,10 @@ class AMOSA:
 			print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
 	@staticmethod
-	def print_progressbar(current, total, precision = 5, message = ""):
-		progress = current * 100 // total // precision
-		remaining = (100 // precision) - progress
-		print(f"   {message}\t({current}/{total})\t[{'#' * progress}{' ' * remaining}] {progress * precision}% {' ' * 30}", end = "\r", flush = True)
+	def print_progressbar(current, total, step = 2, message = ""):
+		progress = current * 100 // total // step
+		remaining = (100 // step) - progress
+		print(f"   {message}\t({current}/{total})\t[{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
 
 	def __compute_deltas(self):
 		objectives = np.array([s["f"] for s in self.__archive])
