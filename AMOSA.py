@@ -534,7 +534,7 @@ class AMOSA:
 	def print_progressbar(current, total, precision = 5, message = ""):
 		progress = current * 100 // total // precision
 		remaining = (100 // precision) - progress
-		print(f"   {message} [{'#' * progress}{' ' * remaining}] {progress * precision}% {' ' * 30}", end = "\r", flush = True)
+		print(f"   {message}\t({current}/{total})\t[{'#' * progress}{' ' * remaining}] {progress * precision}% {' ' * 30}", end = "\r", flush = True)
 
 	def __compute_deltas(self):
 		objectives = np.array([s["f"] for s in self.__archive])
