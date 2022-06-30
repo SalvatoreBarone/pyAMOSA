@@ -295,7 +295,7 @@ class AMOSA:
 				if print_allowed:
 					AMOSA.print_progressbar(n, max_iterations, message = "Clustering (kmeans):")
 				if np.array_equal(centroids, prev_centroids) and print_allowed:
-					AMOSA.print_progressbar(max_iterations-1, max_iterations, message = "Clustering (kmeans):")
+					AMOSA.print_progressbar(max_iterations, max_iterations, message = "Clustering (kmeans):")
 					break
 			print("", end = "\r", flush = True)
 			return centroids
@@ -329,8 +329,11 @@ class AMOSA:
 		self.__nadir = None
 		self.__old_norm_objectives = []
 		self.__phy = []
+		self.__fig = None
+		self.__ax = None
+		self.__line = None
 
-	def run(self, problem, improve = None, remove_checkpoints = True):
+	def run(self, problem, improve = None, remove_checkpoints = True, plot = False):
 		self.__current_temperature = self.__initial_temperature
 		self.__archive = []
 		self.duration = 0
@@ -365,7 +368,10 @@ class AMOSA:
 		assert len(self.__archive) > 0, "Archive not initialized"
 		AMOSA.print_header(problem)
 		self.__print_statistics(problem)
-		self.__main_loop(problem)
+		self.__main_loop(problem, plot)
+		self.__fig = None
+		self.__ax = None
+		self.__line = None
 		self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
 		if len(self.__archive) > self.__archive_hard_limit:
 			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
@@ -459,7 +465,7 @@ class AMOSA:
 	def hillclimb_thread_loop(problem, hillclimb_iterations):
 		return AMOSA.hill_climbing(problem, AMOSA.random_point(problem), hillclimb_iterations)
 
-	def __main_loop(self, problem):
+	def __main_loop(self, problem, plot):
 		current_point = random.choice(self.__archive)
 		while self.__current_temperature > self.__final_temperature:
 			if self.__multiprocessing_enables:
@@ -472,6 +478,8 @@ class AMOSA:
 				self.__archive = AMOSA.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, False, True)
 				self.__n_eval += self.__annealing_iterations
 			self.__print_statistics(problem)
+			if plot:
+				self.__continuous_plot(problem)
 			if len(self.__archive) > self.__archive_soft_limit:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 				self.__print_statistics(problem)
@@ -534,7 +542,8 @@ class AMOSA:
 	def print_progressbar(current, total, step = 2, message = ""):
 		progress = current * 100 // total // step
 		remaining = (100 // step) - progress
-		print(f"   {message}\t({current}/{total})\t[{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
+		#print(f"   {message}  ({current}/{total})  [{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
+		print(f"   {message} [{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
 
 	def __compute_deltas(self):
 		objectives = np.array([s["f"] for s in self.__archive])
@@ -560,6 +569,33 @@ class AMOSA:
 		else:
 			feasible, cv_min, cv_avg = AMOSA.compute_cv(self.__archive)
 			print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
+
+	def __continuous_plot(self, problem):
+		F = self.pareto_front()
+		axis_labels = ["f" + str(i) for i in range(problem.num_of_objectives)]
+		if self.__fig is None:
+			plt.ion()
+			if problem.num_of_objectives == 2:
+				self.__fig, self.__ax = plt.subplots(figsize = (10, 8))
+				self.__ax.set_xlabel(axis_labels[0])
+				self.__ax.set_ylabel(axis_labels[1])
+				self.__line, = self.__ax.plot(F[:, 0], F[:, 1], 'k.')
+			elif problem.num_of_objectives == 3:
+				self.__fig, self.__ax = plt.subplots(figsize = (10, 8), projection = '3d')
+				self.__ax.set_xlabel(axis_labels[0])
+				self.__ax.set_ylabel(axis_labels[1])
+				self.__ax.set_zlabel(axis_labels[2])
+				self.__line, = self.__ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
+		else:
+			if problem.num_of_objectives == 2:
+				self.__line.set_xdata(F[:, 0])
+				self.__line.set_ydata(F[:, 1])
+			elif problem.num_of_objectives == 3:
+				self.__line.set_xdata(F[:, 0])
+				self.__line.set_ydata(F[:, 1])
+				self.__line.set_zdata(F[:, 2])
+			self.__fig.canvas.draw()
+			self.__fig.canvas.flush_events()
 
 	def __check_early_termination(self):
 		if self.__early_termination_window == 0:
