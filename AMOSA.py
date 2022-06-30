@@ -346,14 +346,14 @@ class AMOSA:
 			initial_candidate = self.__read_checkpoint_hill_climb(problem)
 			self.__initial_hill_climbing(problem, initial_candidate)
 			if len(self.__archive) > self.__archive_hard_limit:
-				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 			self.__save_checkpoint_minimize()
 			if remove_checkpoints:
 				os.remove(self.hill_climb_checkpoint_file)
 		elif improve is not None:
 			self.__archive_from_json(problem, improve)
 			if len(self.__archive) > self.__archive_hard_limit:
-				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations)
+				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 			self.__save_checkpoint_minimize()
 			if remove_checkpoints:
 				os.remove(self.hill_climb_checkpoint_file)
