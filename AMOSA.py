@@ -457,7 +457,7 @@ class AMOSA:
 				for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
 					initial_candidate_solutions.append(AMOSA.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
 					self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-					AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
+					AMOSA.print_progressbar(i, num_of_initial_candidate_solutions, message = "Hill climbing:")
 		for x in initial_candidate_solutions:
 			AMOSA.add_to_archive(self.__archive, x)
 
