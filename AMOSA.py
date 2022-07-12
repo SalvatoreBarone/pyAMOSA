@@ -263,7 +263,7 @@ class AMOSA:
 	@staticmethod
 	def kmeans_clustering(archive, num_of_clusters, max_iterations, print_allowed):
 		assert max_iterations > 0
-		if num_of_clusters > 1:
+		if 1 < num_of_clusters < len(archive):
 			# Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
 			# then the rest are initialized w/ probabilities proportional to their distances to the first
 			# Pick a random point from train data for first centroid
@@ -299,8 +299,10 @@ class AMOSA:
 					break
 			print("", end = "\r", flush = True)
 			return centroids
-		else:
+		elif num_of_clusters == 1:
 			return [AMOSA.centroid_of_set(archive)]
+		else:
+			return archive
 
 	@staticmethod
 	def inverted_generational_distance(p_t, p_tau):
