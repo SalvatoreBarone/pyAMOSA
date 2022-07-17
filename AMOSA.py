@@ -165,7 +165,7 @@ class AMOSA:
 	@staticmethod
 	def compute_fitness_range(archive, current_point, new_point):
 		f = [s["f"] for s in archive] + [current_point["f"], new_point["f"]]
-		return np.max(f, axis = 0) - np.min(f, axis = 0)
+		return np.nanmax(f, axis = 0) - np.nanmin(f, axis = 0)
 
 	@staticmethod
 	def hill_climbing(problem, x, max_iterations):
@@ -233,7 +233,7 @@ class AMOSA:
 		g = np.array([s["g"] for s in archive])
 		feasible = np.all(np.less(g, 0), axis = 1).sum()
 		g = g[np.where(g > 0)]
-		return feasible, 0 if len(g) == 0 else np.min(g), 0 if len(g) == 0 else np.average(g)
+		return feasible, 0 if len(g) == 0 else np.nanmin(g), 0 if len(g) == 0 else np.average(g)
 
 	@staticmethod
 	def remove_infeasible(problem, archive):
@@ -272,8 +272,8 @@ class AMOSA:
 				AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
 			for n in range(num_of_clusters - 1):
 				# Calculate normalized distances from points to the centroids
-				dists = [np.sum([np.linalg.norm(np.array(centroid["f"])- np.array(p["f"])) for centroid in centroids]) for p in archive]
-				dists /= np.sum(dists)
+				dists = [np.nansum([np.linalg.norm(np.array(centroid["f"])- np.array(p["f"])) for centroid in centroids]) for p in archive]
+				dists /= np.nansum(dists)
 				# Choose remaining points based on their distances
 				new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = dists)[0]  # Indexed @ zero to get val, not array of val
 				centroids += [archive[new_centroid_idx]]
@@ -306,7 +306,7 @@ class AMOSA:
 
 	@staticmethod
 	def inverted_generational_distance(p_t, p_tau):
-		return sum([np.min([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
+		return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
 
 	def __init__(self, config):
 		self.__archive_hard_limit = config.archive_hard_limit
@@ -500,12 +500,12 @@ class AMOSA:
 			k_s_dominated_by_y = len(s_dominated_by_y)
 			k_s_dominating_y = len(s_dominating_y)
 			if AMOSA.dominates(current_point, new_point) and k_s_dominating_y >= 0:
-				delta_avg = (sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
+				delta_avg = (np.nansum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
 				if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
 					current_point = new_point
 			elif not AMOSA.dominates(current_point, new_point) and not AMOSA.dominates(new_point, current_point):
 				if k_s_dominating_y >= 1:
-					delta_avg = sum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
+					delta_avg = np.nansum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
 					if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
 						current_point = new_point
 				elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
@@ -549,13 +549,13 @@ class AMOSA:
 
 	def __compute_deltas(self):
 		objectives = np.array([s["f"] for s in self.__archive])
-		nadir = np.max(objectives, axis = 0)
-		ideal = np.min(objectives, axis = 0)
+		nadir = np.nanmax(objectives, axis = 0)
+		ideal = np.nanmin(objectives, axis = 0)
 		normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
 		retvalue = (0, 0, 0)
 		if self.__nadir is not None and self.__ideal is not None and self.__old_norm_objectives is not None and len(self.__old_norm_objectives) != 0:
-			delta_nad = np.max([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
-			delta_ideal = np.max([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
+			delta_nad = np.nanmax([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
+			delta_ideal = np.nanmax([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
 			phy = AMOSA.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
 			self.__phy.append(phy)
 			retvalue = (delta_nad, delta_ideal, phy)
