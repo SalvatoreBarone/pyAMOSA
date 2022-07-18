@@ -443,6 +443,11 @@ class AMOSA:
 		initial_candidate_solutions = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 		self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
+	def read_final_archive_from_json(self, problem, json_file):
+		print("Reading archive from JSON file...")
+		archive = json.load(open(json_file))
+		self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
+
 	def __initial_hill_climbing(self, problem, initial_candidate_solutions):
 		num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
 		if self.__hill_climbing_iterations > 0:
