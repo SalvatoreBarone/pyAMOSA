@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, os, json
+import sys, copy, random, time, os, json, warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
@@ -272,11 +272,19 @@ class AMOSA:
 				AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
 			for n in range(num_of_clusters - 1):
 				# Calculate normalized distances from points to the centroids
-				dists = [np.nansum([np.linalg.norm(np.array(centroid["f"])- np.array(p["f"])) for centroid in centroids]) for p in archive]
-				dists /= np.nansum(dists)
-				# Choose remaining points based on their distances
-				new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = dists)[0]  # Indexed @ zero to get val, not array of val
-				centroids += [archive[new_centroid_idx]]
+				dists = np.array([np.nansum([np.linalg.norm(np.array(centroid["f"]) - np.array(p["f"])) for centroid in centroids]) for p in archive])
+				try:
+					normalized_dists = dists / np.nansum(dists)
+					# Choose remaining points based on their distances
+					new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = normalized_dists)[0]  # Indexed @ zero to get val, not array of val
+					centroids += [archive[new_centroid_idx]]
+				except RuntimeError as e:
+					print(e)
+					print(f"Archive: {archive}")
+					print(f"Centroids: {centroids}")
+					print(f"Distance: {dists}")
+					print(f"Normalized distance: {dists / np.nansum(dists)}")
+					exit()
 				if print_allowed:
 					AMOSA.print_progressbar(n, num_of_clusters, message = "Clustering (centroids):")
 			# Iterate, adjusting centroids until converged or until passed max_iter
@@ -309,6 +317,8 @@ class AMOSA:
 		return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
 
 	def __init__(self, config):
+		np.errstate(divide = 'raise')
+		np.errstate(invalid = 'raise')
 		self.__archive_hard_limit = config.archive_hard_limit
 		self.__archive_soft_limit = config.archive_soft_limit
 		self.__archive_gamma = config.archive_gamma
@@ -556,18 +566,24 @@ class AMOSA:
 		objectives = np.array([s["f"] for s in self.__archive])
 		nadir = np.nanmax(objectives, axis = 0)
 		ideal = np.nanmin(objectives, axis = 0)
-		normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
-		retvalue = (0, 0, 0)
-		if self.__nadir is not None and self.__ideal is not None and self.__old_norm_objectives is not None and len(self.__old_norm_objectives) != 0:
-			delta_nad = np.nanmax([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
-			delta_ideal = np.nanmax([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
-			phy = AMOSA.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
-			self.__phy.append(phy)
-			retvalue = (delta_nad, delta_ideal, phy)
-		self.__nadir = nadir
-		self.__ideal = ideal
-		self.__old_norm_objectives = normalized_objectives
-		return retvalue
+		try:
+			normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
+			retvalue = (0, 0, 0)
+			if self.__nadir is not None and self.__ideal is not None and self.__old_norm_objectives is not None and len(self.__old_norm_objectives) != 0:
+				delta_nad = np.nanmax([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
+				delta_ideal = np.nanmax([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
+				phy = AMOSA.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
+				self.__phy.append(phy)
+				retvalue = (delta_nad, delta_ideal, phy)
+			self.__nadir = nadir
+			self.__ideal = ideal
+			self.__old_norm_objectives = normalized_objectives
+			return retvalue
+		except FloatingPointError as e:
+			print(e)
+			print(f"Objectives: {objectives}")
+			print (f"Nadir: {nadir}, Ideal: {ideal}")
+			exit()
 
 	def __print_statistics(self, problem):
 		delta_nad, delta_ideal, phy = self.__compute_deltas()
