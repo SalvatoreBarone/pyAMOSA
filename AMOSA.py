@@ -278,7 +278,7 @@ class AMOSA:
 					# Choose remaining points based on their distances
 					new_centroid_idx = np.random.choice(range(len(archive)), size = 1, p = normalized_dists)[0]  # Indexed @ zero to get val, not array of val
 					centroids += [archive[new_centroid_idx]]
-				except RuntimeError as e:
+				except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
 					print(e)
 					print(f"Archive: {archive}")
 					print(f"Centroids: {centroids}")
@@ -317,8 +317,7 @@ class AMOSA:
 		return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
 
 	def __init__(self, config):
-		np.errstate(divide = 'raise')
-		np.errstate(invalid = 'raise')
+		warnings.filterwarnings("error")
 		self.__archive_hard_limit = config.archive_hard_limit
 		self.__archive_soft_limit = config.archive_soft_limit
 		self.__archive_gamma = config.archive_gamma
@@ -455,7 +454,9 @@ class AMOSA:
 
 	def read_final_archive_from_json(self, problem, json_file):
 		print("Reading archive from JSON file...")
-		archive = json.load(open(json_file))
+		file = open(json_file)
+		archive = json.load(file)
+		file.close()
 		self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 
 	def __initial_hill_climbing(self, problem, initial_candidate_solutions):
@@ -566,6 +567,7 @@ class AMOSA:
 		objectives = np.array([s["f"] for s in self.__archive])
 		nadir = np.nanmax(objectives, axis = 0)
 		ideal = np.nanmin(objectives, axis = 0)
+		normalized_objectives = np.array([])
 		try:
 			normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
 			retvalue = (0, 0, 0)
@@ -579,10 +581,11 @@ class AMOSA:
 			self.__ideal = ideal
 			self.__old_norm_objectives = normalized_objectives
 			return retvalue
-		except FloatingPointError as e:
+		except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
 			print(e)
 			print(f"Objectives: {objectives}")
 			print (f"Nadir: {nadir}, Ideal: {ideal}")
+			print(f"Normalized objectives: {normalized_objectives}")
 			exit()
 
 	def __print_statistics(self, problem):
@@ -661,7 +664,9 @@ class AMOSA:
 
 	def __read_checkpoint_minimize(self, problem):
 		print("Resuming minimize from checkpoint...")
-		checkpoint = json.load(open(self.minimize_checkpoint_file))
+		file = open(self.minimize_checkpoint_file)
+		checkpoint = json.load(file)
+		file.close()
 		self.__n_eval = int(checkpoint["n_eval"])
 		self.__current_temperature = float(checkpoint["t"])
 		self.__ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
@@ -672,5 +677,7 @@ class AMOSA:
 
 	def __read_checkpoint_hill_climb(self, problem):
 		print("Resuming hill-climbing from checkpoint...")
-		checkpoint = json.load(open(self.hill_climb_checkpoint_file))
+		file = open(self.hill_climb_checkpoint_file)
+		checkpoint = json.load(file)
+		file.close()
 		return [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
