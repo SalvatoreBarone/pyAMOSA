@@ -431,14 +431,16 @@ class AMOSA:
 			print(e)
 			exit()
 
-	def archive_to_csv(self, problem, csv_file):
+	def archive_to_csv(self, problem, csv_file, fitness_labels = None):
 		original_stdout = sys.stdout
-		row_format = "{:};" * problem.num_of_objectives + "{:};" * problem.num_of_variables
+		row_format = "{:};" + "{:};" * problem.num_of_objectives + "{:};" * problem.num_of_variables
+		if fitness_labels is None:
+			fitness_labels = [f"f{i}" for i in range(problem.num_of_objectives)]	
 		with open(csv_file, "w") as file:
 			sys.stdout = file
-			print(row_format.format(*[f"f{i}" for i in range(problem.num_of_objectives)], *[f"x{i}" for i in range(problem.num_of_variables)]))
-			for f, x in zip(self.pareto_front(), self.pareto_set()):
-				print(row_format.format(*f, *x))
+			print(row_format.format("", *fitness_labels, *[f"x{i}" for i in range(problem.num_of_variables)]))
+			for i, f, x in zip(range(len(self.pareto_front())), self.pareto_front(), self.pareto_set()):
+				print(row_format.format(i, *f, *x))
 		sys.stdout = original_stdout
 
 	def __random_archive(self, problem):
