@@ -91,18 +91,27 @@ class AMOSA:
 		def optimums(self):
 			return []
 
+		@staticmethod
+		def get_cache_key(s):
+			return ''.join([str(i) for i in s["x"]])
+
+		def is_cached(self, s):
+			return True if self.get_cache_key(s) in self.cache.keys() else False
+
+		def add_to_cache(self, s):
+			self.cache[self.get_cache_key(s)] = {"f": s["f"], "g": s["g"]}
+
 		def load_cache(self, json_file):
 			if os.path.exists(json_file):
 				f = open(json_file)
-				cache = json.load(f)
-				self.cache = { tuple([int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(k.split(","), self.types)]) : {"f": v["f"], "g": v["g"]} for k, v in cache.items() }
+				self.cache = json.load(f)
 				f.close()
+				print(f"{len(self.cache)} cache entries loaded from {json_file}")
 
 		def store_cache(self, json_file):
 			try:
-				cache = {','.join([str(i) for i in k]): v for k, v in self.cache.items()}
 				with open(json_file, 'w') as outfile:
-					outfile.write(json.dumps(cache))
+					outfile.write(json.dumps(self.cache))
 			except TypeError as e:
 				print(self.cache)
 				print(e)
@@ -110,8 +119,8 @@ class AMOSA:
 
 		def archive_to_cache(self, archive):
 			for s in archive:
-				if tuple(s["x"]) not in self.cache.keys():
-					self.cache[tuple(s["x"])] = {"f": s["f"], "g": s["g"]}
+				if not self.is_cached(s):
+					self.add_to_cache(s)
 
 	@staticmethod
 	def is_the_same(x, y):
@@ -125,17 +134,17 @@ class AMOSA:
 	def get_objectives(problem, s):
 		problem.total_calls +=1
 		# if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
-		if tuple(s["x"]) is problem.cache.keys():
-			s["f"] = problem.cache[tuple(s["x"])]["f"]
-			s["g"] = problem.cache[tuple(s["x"])]["g"]
+		if problem.is_cached(s):
+			s["f"] = problem.cache[problem.get_cache_key(s)]["f"]
+			s["g"] = problem.cache[problem.get_cache_key(s)]["g"]
 			problem.cache_hits += 1
 		else:
 			# if s["x"] is not in the cache, call "evaluate" and add s["x"] to the cache
 			out = {"f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
 			problem.evaluate(s["x"], out)
-			problem.cache[tuple(s["x"])] = {"f": out["f"], "g": out["g"]}
 			s["f"] = out["f"]
 			s["g"] = out["g"]
+			problem.add_to_cache(s)
 
 	@staticmethod
 	def dominates(x, y):
@@ -180,7 +189,7 @@ class AMOSA:
 		# while z["x"] is in the cache, repeat the random perturbation
 		# a safety-exit prevents infinite loop, using a counter variable
 		safety_exit = problem.max_attempt
-		while safety_exit >= 0 and tuple(z["x"]) in problem.cache.keys():
+		while safety_exit >= 0 and problem.is_cached(z):
 			safety_exit -= 1
 			indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
 			for i in indexes:
@@ -236,7 +245,7 @@ class AMOSA:
 		# while z["x"] is in the cache, repeat the random perturbation
 		# a safety-exit prevents infinite loop, using a counter variable
 		safety_exit = problem.max_attempt
-		while safety_exit >= 0 and tuple(s["x"]) in problem.cache.keys():
+		while safety_exit >= 0 and problem.is_cached(s):
 			safety_exit -= 1
 			lower_bound = problem.lower_bound[d] - s["x"][d]
 			upper_bound = problem.upper_bound[d] - s["x"][d]
