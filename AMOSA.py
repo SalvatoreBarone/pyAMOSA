@@ -63,6 +63,7 @@ class AMOSAConfig:
 class AMOSA:
 	hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 	minimize_checkpoint_file = "minimize_checkpoint.json"
+	cache_file = "cache_file.json"
 
 	class Type(Enum):
 		INTEGER = 0
@@ -79,12 +80,38 @@ class AMOSA:
 			self.upper_bound = upper_bounds
 			self.num_of_objectives = num_of_objectives
 			self.num_of_constraints = num_of_constraints
+			self.cache = {}
+			self.total_calls = 0
+			self.cache_hits = 0
+			self.max_attempt = self.num_of_variables
 
 		def evaluate(self, x, out):
 			pass
 
 		def optimums(self):
 			return []
+
+		def load_cache(self, json_file):
+			if os.path.exists(json_file):
+				f = open(json_file)
+				cache = json.load(f)
+				self.cache = { tuple([int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(k.split(","), self.types)]) : {"f": v["f"], "g": v["g"]} for k, v in cache.items() }
+				f.close()
+
+		def store_cache(self, json_file):
+			try:
+				cache = {','.join([str(i) for i in k]): v for k, v in self.cache.items()}
+				with open(json_file, 'w') as outfile:
+					outfile.write(json.dumps(cache))
+			except TypeError as e:
+				print(self.cache)
+				print(e)
+				exit()
+
+		def archive_to_cache(self, archive):
+			for s in archive:
+				if tuple(s["x"]) not in self.cache.keys():
+					self.cache[tuple(s["x"])] = {"f": s["f"], "g": s["g"]}
 
 	@staticmethod
 	def is_the_same(x, y):
@@ -96,10 +123,19 @@ class AMOSA:
 
 	@staticmethod
 	def get_objectives(problem, s):
-		out = {"f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
-		problem.evaluate(s["x"], out)
-		s["f"] = out["f"]
-		s["g"] = out["g"]
+		problem.total_calls +=1
+		# if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
+		if tuple(s["x"]) is problem.cache.keys():
+			s["f"] = problem.cache[tuple(s["x"])]["f"]
+			s["g"] = problem.cache[tuple(s["x"])]["g"]
+			problem.cache_hits += 1
+		else:
+			# if s["x"] is not in the cache, call "evaluate" and add s["x"] to the cache
+			out = {"f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+			problem.evaluate(s["x"], out)
+			problem.cache[tuple(s["x"])] = {"f": out["f"], "g": out["g"]}
+			s["f"] = out["f"]
+			s["g"] = out["g"]
 
 	@staticmethod
 	def dominates(x, y):
@@ -141,12 +177,17 @@ class AMOSA:
 	@staticmethod
 	def random_perturbation(problem, s, strength):
 		z = copy.deepcopy(s)
-		indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
-		for i in indexes:
-			lb = problem.lower_bound[i]
-			ub = problem.upper_bound[i]
-			tp = problem.types[i]
-			z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub)
+		# while z["x"] is in the cache, repeat the random perturbation
+		# a safety-exit prevents infinite loop, using a counter variable
+		safety_exit = problem.max_attempt
+		while safety_exit >= 0 and tuple(z["x"]) in problem.cache.keys():
+			safety_exit -= 1
+			indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+			for i in indexes:
+				lb = problem.lower_bound[i]
+				ub = problem.upper_bound[i]
+				tp = problem.types[i]
+				z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub)
 		AMOSA.get_objectives(problem, z)
 		return z
 
@@ -192,19 +233,24 @@ class AMOSA:
 
 	@staticmethod
 	def hill_climbing_adaptive_step(problem, s, d, up):
-		lower_bound = problem.lower_bound[d] - s["x"][d]
-		upper_bound = problem.upper_bound[d] - s["x"][d]
-		if (up == -1 and lower_bound == 0) or (up == 1 and upper_bound == 0):
-			return 0
-		if problem.types[d] == AMOSA.Type.INTEGER:
-			step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
-			while step == 0:
+		# while z["x"] is in the cache, repeat the random perturbation
+		# a safety-exit prevents infinite loop, using a counter variable
+		safety_exit = problem.max_attempt
+		while safety_exit >= 0 and tuple(s["x"]) in problem.cache.keys():
+			safety_exit -= 1
+			lower_bound = problem.lower_bound[d] - s["x"][d]
+			upper_bound = problem.upper_bound[d] - s["x"][d]
+			if (up == -1 and lower_bound == 0) or (up == 1 and upper_bound == 0):
+				return 0
+			if problem.types[d] == AMOSA.Type.INTEGER:
 				step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
-		else:
-			step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
-			while step == 0:
+				while step == 0:
+					step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
+			else:
 				step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
-		s["x"][d] += step
+				while step == 0:
+					step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
+			s["x"][d] += step
 		AMOSA.get_objectives(problem, s)
 
 	@staticmethod
@@ -332,6 +378,7 @@ class AMOSA:
 		self.__multiprocessing_enables = config.multiprocessing_enabled
 		self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 		self.minimize_checkpoint_file = "minimize_checkpoint.json"
+		self.cache_file = "cache.json"
 		self.__current_temperature = 0
 		self.__archive = []
 		self.duration = 0
@@ -345,6 +392,7 @@ class AMOSA:
 		self.__line = None
 
 	def run(self, problem, improve = None, remove_checkpoints = True, plot = False):
+		problem.load_cache(self.cache_file)
 		self.__current_temperature = self.__initial_temperature
 		self.__archive = []
 		self.duration = 0
@@ -356,8 +404,10 @@ class AMOSA:
 		self.duration = time.time()
 		if os.path.exists(self.minimize_checkpoint_file):
 			self.__read_checkpoint_minimize(problem)
+			problem.archive_to_cache(self.__archive)
 		elif os.path.exists(self.hill_climb_checkpoint_file):
 			initial_candidate = self.__read_checkpoint_hill_climb(problem)
+			problem.archive_to_cache(initial_candidate)
 			self.__initial_hill_climbing(problem, initial_candidate)
 			if len(self.__archive) > self.__archive_hard_limit:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
@@ -366,6 +416,7 @@ class AMOSA:
 				os.remove(self.hill_climb_checkpoint_file)
 		elif improve is not None:
 			self.__archive_from_json(problem, improve)
+			problem.archive_to_cache(self.__archive)
 			if len(self.__archive) > self.__archive_hard_limit:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 			self.__save_checkpoint_minimize()
@@ -388,6 +439,7 @@ class AMOSA:
 			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 		self.__print_statistics(problem)
 		self.duration = time.time() - self.duration
+		problem.store_cache(self.cache_file)
 		if remove_checkpoints:
 			os.remove(self.minimize_checkpoint_file)
 
@@ -450,7 +502,9 @@ class AMOSA:
 
 	def __archive_from_json(self, problem, json_file):
 		print("Initializing archive from JSON file...")
-		archive = json.load(open(json_file))
+		f = open(json_file)
+		archive = json.load(f)
+		f.close()
 		initial_candidate_solutions = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 		self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
@@ -504,6 +558,7 @@ class AMOSA:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 				self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
+			problem.store_cache(self.cache_file)
 			self.__check_early_termination()
 
 	@staticmethod
