@@ -75,11 +75,16 @@ class AMOSA:
 			assert num_of_variables == len(lower_bounds), "Mismatch in the specified number of variables and their lower bound declaration"
 			assert num_of_variables == len(upper_bounds), "Mismatch in the specified number of variables and their upper bound declaration"
 			self.num_of_variables = num_of_variables
-			self.types = types
-			self.lower_bound = lower_bounds
-			self.upper_bound = upper_bounds
 			self.num_of_objectives = num_of_objectives
 			self.num_of_constraints = num_of_constraints
+			for t in types:
+				assert t == AMOSA.Type.INTEGER or t == AMOSA.Type.REAL, "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
+			self.types = types
+			for lb, ub, t in zip(lower_bounds, upper_bounds, self.types):
+				assert isinstance(lb, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
+				assert isinstance(ub, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
+			self.lower_bound = lower_bounds
+			self.upper_bound = upper_bounds
 			self.cache = {}
 			self.total_calls = 0
 			self.cache_hits = 0
@@ -134,7 +139,7 @@ class AMOSA:
 	def get_objectives(problem, s):
 		for i, t in zip(s["x"], problem.types):
 			assert isinstance(i, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
-		problem.total_calls +=1
+		problem.total_calls += 1
 		# if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
 		if problem.is_cached(s):
 			s["f"] = problem.cache[problem.get_cache_key(s)]["f"]
