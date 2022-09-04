@@ -132,6 +132,8 @@ class AMOSA:
 
 	@staticmethod
 	def get_objectives(problem, s):
+		for i, t in zip(s["x"], problem.types):
+			assert isinstance(i, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
 		problem.total_calls +=1
 		# if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
 		if problem.is_cached(s):
