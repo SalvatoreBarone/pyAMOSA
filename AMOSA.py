@@ -304,6 +304,13 @@ class AMOSA:
 		return archive
 
 	@staticmethod
+	def remove_dominated(archive):
+		nondominated_archive = []
+		for x in archive:
+			AMOSA.add_to_archive(nondominated_archive, x)
+		return nondominated_archive
+
+	@staticmethod
 	def clustering(archive, problem, hard_limit, max_iterations, print_allowed):
 		if problem.num_of_constraints > 0:
 			feasible = [s for s in archive if all([g <= 0 for g in s["g"]])]
@@ -451,6 +458,7 @@ class AMOSA:
 		self.__ax = None
 		self.__line = None
 		self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
+		self.__archive = AMOSA.remove_dominated(self.__archive)
 		if len(self.__archive) > self.__archive_hard_limit:
 			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 		self.__print_statistics(problem)
