@@ -93,7 +93,7 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     optimizer = AMOSA(config)
     optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
     optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
-    optimizer.cache_file = f"{prob}_cache_file.json"
+    optimizer.cache_dir = f".{prob}_cache"
     if attempts != 0:
         problem.max_attempt = attempts
     optimizer.run(problem, improve = json_file, plot = plot)

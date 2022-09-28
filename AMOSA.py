@@ -14,12 +14,53 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, os, json, warnings
+import sys, copy, random, time, os, json, warnings, math
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
 from multiprocessing import cpu_count, Pool
+from distutils.dir_util import mkpath
+from itertools import islice
 
+
+class MultiFileCacheHandle:
+
+	def __init__(self, directory, max_size_mb=10):
+		self.directory = directory
+		self.max_size_mb = max_size_mb
+
+	def read(self):
+		cache = {}
+		if os.path.isdir(self.directory):
+			for f in os.listdir(self.directory):
+				if f.endswith('.json'):
+					with open(f"{self.directory}/{f}") as j:
+						tmp = json.load(j)
+						cache = {**cache, **tmp}
+		print(f"{len(cache)} cache entries loaded from {self.directory}")
+		return cache
+
+	def write(self, cache):
+		if os.path.isdir(self.directory):
+			for file in os.listdir(self.directory):
+				if file.endswith('.json'):
+					os.remove(f"{self.directory}/{file}")
+		else:
+			mkpath(self.directory)
+		total_entries = len(cache)
+		total_size = sys.getsizeof(json.dumps(cache))
+		avg_entry_size = math.ceil(total_size / total_entries)
+		max_entries_per_file = int(self.max_size_mb * (2 ** 20) / avg_entry_size)
+		splits = int(math.ceil(total_entries / max_entries_per_file))
+		for item, count in zip(MultiFileCacheHandle.chunks(cache, max_entries_per_file), range(splits)):
+			with open(f"{self.directory}/{count:09d}.json", 'w') as outfile:
+				outfile.write(json.dumps(item))
+
+	@staticmethod
+	def chunks(data, max_entries):
+		it = iter(data)
+		for i in range(0, len(data), max_entries):
+			yield {k: data[k] for k in islice(it, max_entries)}
 
 class AMOSAConfig:
 	def __init__(
@@ -63,7 +104,7 @@ class AMOSAConfig:
 class AMOSA:
 	hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 	minimize_checkpoint_file = "minimize_checkpoint.json"
-	cache_file = "cache_file.json"
+	cache_dir = ".cache"
 
 	class Type(Enum):
 		INTEGER = 0
@@ -106,21 +147,13 @@ class AMOSA:
 		def add_to_cache(self, s):
 			self.cache[self.get_cache_key(s)] = {"f": s["f"], "g": s["g"]}
 
-		def load_cache(self, json_file):
-			if os.path.exists(json_file):
-				f = open(json_file)
-				self.cache = json.load(f)
-				f.close()
-				print(f"{len(self.cache)} cache entries loaded from {json_file}")
+		def load_cache(self, directory):
+			handler = MultiFileCacheHandle(directory)
+			self.cache = handler.read()
 
-		def store_cache(self, json_file):
-			try:
-				with open(json_file, 'w') as outfile:
-					outfile.write(json.dumps(self.cache))
-			except TypeError as e:
-				print(self.cache)
-				print(e)
-				exit()
+		def store_cache(self, directory):
+			handler = MultiFileCacheHandle(directory)
+			handler.write(self.cache)
 
 		def archive_to_cache(self, archive):
 			for s in archive:
@@ -401,7 +434,7 @@ class AMOSA:
 		self.__multiprocessing_enables = config.multiprocessing_enabled
 		self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 		self.minimize_checkpoint_file = "minimize_checkpoint.json"
-		self.cache_file = "cache.json"
+		self.cache_dir = ".cache"
 		self.__current_temperature = 0
 		self.__archive = []
 		self.duration = 0
@@ -415,7 +448,7 @@ class AMOSA:
 		self.__line = None
 
 	def run(self, problem, improve = None, remove_checkpoints = True, plot = False):
-		problem.load_cache(self.cache_file)
+		problem.load_cache(self.cache_dir)
 		self.__current_temperature = self.__initial_temperature
 		self.__archive = []
 		self.duration = 0
@@ -463,7 +496,7 @@ class AMOSA:
 			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 		self.__print_statistics(problem)
 		self.duration = time.time() - self.duration
-		problem.store_cache(self.cache_file)
+		problem.store_cache(self.cache_dir)
 		if remove_checkpoints:
 			os.remove(self.minimize_checkpoint_file)
 
@@ -582,7 +615,7 @@ class AMOSA:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 				self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
-			problem.store_cache(self.cache_file)
+			problem.store_cache(self.cache_dir)
 			self.__check_early_termination()
 
 	@staticmethod
