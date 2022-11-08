@@ -14,12 +14,53 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, os, json, warnings
+import sys, copy, random, time, os, json, warnings, math
 import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
 from multiprocessing import cpu_count, Pool
+from distutils.dir_util import mkpath
+from itertools import islice
 
+
+class MultiFileCacheHandle:
+
+	def __init__(self, directory, max_size_mb=10):
+		self.directory = directory
+		self.max_size_mb = max_size_mb
+
+	def read(self):
+		cache = {}
+		if os.path.isdir(self.directory):
+			for f in os.listdir(self.directory):
+				if f.endswith('.json'):
+					with open(f"{self.directory}/{f}") as j:
+						tmp = json.load(j)
+						cache = {**cache, **tmp}
+		print(f"{len(cache)} cache entries loaded from {self.directory}")
+		return cache
+
+	def write(self, cache):
+		if os.path.isdir(self.directory):
+			for file in os.listdir(self.directory):
+				if file.endswith('.json'):
+					os.remove(f"{self.directory}/{file}")
+		else:
+			mkpath(self.directory)
+		total_entries = len(cache)
+		total_size = sys.getsizeof(json.dumps(cache))
+		avg_entry_size = math.ceil(total_size / total_entries)
+		max_entries_per_file = int(self.max_size_mb * (2 ** 20) / avg_entry_size)
+		splits = int(math.ceil(total_entries / max_entries_per_file))
+		for item, count in zip(MultiFileCacheHandle.chunks(cache, max_entries_per_file), range(splits)):
+			with open(f"{self.directory}/{count:09d}.json", 'w') as outfile:
+				outfile.write(json.dumps(item))
+
+	@staticmethod
+	def chunks(data, max_entries):
+		it = iter(data)
+		for _ in range(0, len(data), max_entries):
+			yield {k: data[k] for k in islice(it, max_entries)}
 
 class AMOSAConfig:
 	def __init__(
@@ -63,7 +104,7 @@ class AMOSAConfig:
 class AMOSA:
 	hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 	minimize_checkpoint_file = "minimize_checkpoint.json"
-	cache_file = "cache_file.json"
+	cache_dir = ".cache"
 
 	class Type(Enum):
 		INTEGER = 0
@@ -75,11 +116,17 @@ class AMOSA:
 			assert num_of_variables == len(lower_bounds), "Mismatch in the specified number of variables and their lower bound declaration"
 			assert num_of_variables == len(upper_bounds), "Mismatch in the specified number of variables and their upper bound declaration"
 			self.num_of_variables = num_of_variables
-			self.types = types
-			self.lower_bound = lower_bounds
-			self.upper_bound = upper_bounds
 			self.num_of_objectives = num_of_objectives
 			self.num_of_constraints = num_of_constraints
+			for t in types:
+				assert t in [AMOSA.Type.INTEGER, AMOSA.Type.REAL], "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
+
+			self.types = types
+			for lb, ub, t in zip(lower_bounds, upper_bounds, self.types):
+				assert isinstance(lb, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
+				assert isinstance(ub, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
+			self.lower_bound = lower_bounds
+			self.upper_bound = upper_bounds
 			self.cache = {}
 			self.total_calls = 0
 			self.cache_hits = 0
@@ -96,26 +143,18 @@ class AMOSA:
 			return ''.join([str(i) for i in s["x"]])
 
 		def is_cached(self, s):
-			return True if self.get_cache_key(s) in self.cache.keys() else False
+			return self.get_cache_key(s) in self.cache.keys()
 
 		def add_to_cache(self, s):
 			self.cache[self.get_cache_key(s)] = {"f": s["f"], "g": s["g"]}
 
-		def load_cache(self, json_file):
-			if os.path.exists(json_file):
-				f = open(json_file)
-				self.cache = json.load(f)
-				f.close()
-				print(f"{len(self.cache)} cache entries loaded from {json_file}")
+		def load_cache(self, directory):
+			handler = MultiFileCacheHandle(directory)
+			self.cache = handler.read()
 
-		def store_cache(self, json_file):
-			try:
-				with open(json_file, 'w') as outfile:
-					outfile.write(json.dumps(self.cache))
-			except TypeError as e:
-				print(self.cache)
-				print(e)
-				exit()
+		def store_cache(self, directory):
+			handler = MultiFileCacheHandle(directory)
+			handler.write(self.cache)
 
 		def archive_to_cache(self, archive):
 			for s in archive:
@@ -134,7 +173,7 @@ class AMOSA:
 	def get_objectives(problem, s):
 		for i, t in zip(s["x"], problem.types):
 			assert isinstance(i, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
-		problem.total_calls +=1
+		problem.total_calls += 1
 		# if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
 		if problem.is_cached(s):
 			s["f"] = problem.cache[problem.get_cache_key(s)]["f"]
@@ -161,11 +200,11 @@ class AMOSA:
 
 	@staticmethod
 	def both_infeasible_but_x_is_better(x, y):
-		return any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all([i <= j for i, j in zip(x["g"], y["g"])]) and any([i < j for i, j in zip(x["g"], y["g"])])
+		return any(i > 0 for i in x["g"]) and any(i > 0 for i in y["g"]) and all(i <= j for i, j in zip(x["g"], y["g"])) and any(i < j for i, j in zip(x["g"], y["g"]))
 
 	@staticmethod
 	def both_feasible_but_x_is_better(x, y):
-		return all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all([i <= j for i, j in zip(x["f"], y["f"])]) and any([i < j for i, j in zip(x["f"], y["f"])])
+		return all(i <= 0 for i in x["g"]) and all(i <= 0 for i in y["g"]) and all(i <= j for i, j in zip(x["f"], y["f"])) and any(i < j for i, j in zip(x["f"], y["f"]))
 
 	@staticmethod
 	def lower_point(problem):
@@ -235,12 +274,11 @@ class AMOSA:
 	def hill_climbing_direction(problem, c_d = None):
 		if c_d is None:
 			return random.randrange(0, problem.num_of_variables), 1 if random.random() > 0.5 else -1
-		else:
-			up = 1 if random.random() > 0.5 else -1
+		up = 1 if random.random() > 0.5 else -1
+		d = random.randrange(0, problem.num_of_variables)
+		while c_d == d:
 			d = random.randrange(0, problem.num_of_variables)
-			while c_d == d:
-				d = random.randrange(0, problem.num_of_variables)
-			return d, up
+		return d, up
 
 	@staticmethod
 	def hill_climbing_adaptive_step(problem, s, d, up):
@@ -272,7 +310,7 @@ class AMOSA:
 			for y in archive:
 				if AMOSA.dominates(x, y):
 					archive.remove(y)
-			if not any([AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in archive]):
+			if not any(AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in archive):
 				archive.append(x)
 
 	@staticmethod
@@ -295,26 +333,32 @@ class AMOSA:
 	@staticmethod
 	def remove_infeasible(problem, archive):
 		if problem.num_of_constraints > 0:
-			return [s for s in archive if all([g <= 0 for g in s["g"]])]
+			return [s for s in archive if all(g <= 0 for g in s["g"])]
 		return archive
 
 	@staticmethod
+	def remove_dominated(archive):
+		nondominated_archive = []
+		for x in archive:
+			AMOSA.add_to_archive(nondominated_archive, x)
+		return nondominated_archive
+
+	@staticmethod
 	def clustering(archive, problem, hard_limit, max_iterations, print_allowed):
-		if problem.num_of_constraints > 0:
-			feasible = [s for s in archive if all([g <= 0 for g in s["g"]])]
-			unfeasible = [s for s in archive if any([g > 0 for g in s["g"]])]
-			if len(feasible) > hard_limit:
-				return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations, print_allowed)
-			elif len(feasible) < hard_limit and len(unfeasible) != 0:
-				return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations, print_allowed)
-			else:
-				return feasible
-		else:
+		if problem.num_of_constraints == 0:
 			return AMOSA.kmeans_clustering(archive, hard_limit, max_iterations, print_allowed)
+		feasible = [s for s in archive if all(g <= 0 for g in s["g"])]
+		unfeasible = [s for s in archive if any(g > 0 for g in s["g"])]
+		if len(feasible) > hard_limit:
+			return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations, print_allowed)
+		elif len(feasible) < hard_limit and len(unfeasible) != 0:
+			return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations, print_allowed)
+		else:
+			return feasible
 
 	@staticmethod
 	def centroid_of_set(input_set):
-		d = np.array([np.nansum([np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) if not np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.nan for j in input_set]) for i in input_set])
+		d = np.array([np.nansum([np.nan if np.array_equal(np.array(i["x"]), np.array(j["x"])) else np.linalg.norm(np.array(i["f"]) - np.array(j["f"])) for j in input_set]) for i in input_set])
 		return input_set[np.nanargmin(d)]
 
 	@staticmethod
@@ -389,7 +433,7 @@ class AMOSA:
 		self.__multiprocessing_enables = config.multiprocessing_enabled
 		self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
 		self.minimize_checkpoint_file = "minimize_checkpoint.json"
-		self.cache_file = "cache.json"
+		self.cache_dir = ".cache"
 		self.__current_temperature = 0
 		self.__archive = []
 		self.duration = 0
@@ -403,7 +447,7 @@ class AMOSA:
 		self.__line = None
 
 	def run(self, problem, improve = None, remove_checkpoints = True, plot = False):
-		problem.load_cache(self.cache_file)
+		problem.load_cache(self.cache_dir)
 		self.__current_temperature = self.__initial_temperature
 		self.__archive = []
 		self.duration = 0
@@ -446,11 +490,12 @@ class AMOSA:
 		self.__ax = None
 		self.__line = None
 		self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
+		self.__archive = AMOSA.remove_dominated(self.__archive)
 		if len(self.__archive) > self.__archive_hard_limit:
 			self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 		self.__print_statistics(problem)
 		self.duration = time.time() - self.duration
-		problem.store_cache(self.cache_file)
+		problem.store_cache(self.cache_dir)
 		if remove_checkpoints:
 			os.remove(self.minimize_checkpoint_file)
 
@@ -465,7 +510,7 @@ class AMOSA:
 
 	def plot_pareto(self, problem, pdf_file, fig_title = "Pareto front", axis_labels = None):
 		if axis_labels is None:
-			axis_labels = ["f" + str(i) for i in range(problem.num_of_objectives)]
+			axis_labels = [f"f{str(i)}" for i in range(problem.num_of_objectives)]
 		F = self.pareto_front()
 		if problem.num_of_objectives == 2:
 			plt.figure(figsize = (10, 10), dpi = 300)
@@ -513,17 +558,15 @@ class AMOSA:
 
 	def __archive_from_json(self, problem, json_file):
 		print("Initializing archive from JSON file...")
-		f = open(json_file)
-		archive = json.load(f)
-		f.close()
+		with open(json_file) as f:
+			archive = json.load(f)
 		initial_candidate_solutions = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 		self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
 	def read_final_archive_from_json(self, problem, json_file):
 		print("Reading archive from JSON file...")
-		file = open(json_file)
-		archive = json.load(file)
-		file.close()
+		with open(json_file) as file:
+			archive = json.load(file)
 		self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 
 	def __initial_hill_climbing(self, problem, initial_candidate_solutions):
@@ -537,7 +580,7 @@ class AMOSA:
 						new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
 					initial_candidate_solutions += new_points
 					self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-					AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = f"Hill climbing:")
+					AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
 			else:
 				for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
 					initial_candidate_solutions.append(AMOSA.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
@@ -569,7 +612,7 @@ class AMOSA:
 				self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
 				self.__print_statistics(problem)
 			self.__save_checkpoint_minimize()
-			problem.store_cache(self.cache_file)
+			problem.store_cache(self.cache_dir)
 			self.__check_early_termination()
 
 	@staticmethod
@@ -611,7 +654,7 @@ class AMOSA:
 				raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
 			if print_allowed:
 				AMOSA.print_progressbar(iter+1, annealing_iterations, message = "Annealing:")
-		return archive if not clustering_before_return else AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
+		return AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed) if clustering_before_return else archive
 
 	@staticmethod
 	def print_header(problem):
@@ -666,7 +709,7 @@ class AMOSA:
 
 	def __continuous_plot(self, problem):
 		F = self.pareto_front()
-		axis_labels = ["f" + str(i) for i in range(problem.num_of_objectives)]
+		axis_labels = [f"f{str(i)}" for i in range(problem.num_of_objectives)]
 		if self.__fig is None:
 			plt.ion()
 			if problem.num_of_objectives == 2:
@@ -694,12 +737,11 @@ class AMOSA:
 	def __check_early_termination(self):
 		if self.__early_termination_window == 0:
 			self.__current_temperature *= self.__cooling_factor
+		elif len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
+			print("Early-termination criterion has been met!")
+			self.__current_temperature = self.__final_temperature
 		else:
-			if len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
-				print("Early-termination criterion has been met!")
-				self.__current_temperature = self.__final_temperature
-			else:
-				self.__current_temperature *= self.__cooling_factor
+			self.__current_temperature *= self.__cooling_factor
 
 	def __save_checkpoint_minimize(self):
 		checkpoint = {
@@ -732,9 +774,8 @@ class AMOSA:
 
 	def __read_checkpoint_minimize(self, problem):
 		print("Resuming minimize from checkpoint...")
-		file = open(self.minimize_checkpoint_file)
-		checkpoint = json.load(file)
-		file.close()
+		with open(self.minimize_checkpoint_file) as file:
+			checkpoint = json.load(file)
 		self.__n_eval = int(checkpoint["n_eval"])
 		self.__current_temperature = float(checkpoint["t"])
 		self.__ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
@@ -745,7 +786,6 @@ class AMOSA:
 
 	def __read_checkpoint_hill_climb(self, problem):
 		print("Resuming hill-climbing from checkpoint...")
-		file = open(self.hill_climb_checkpoint_file)
-		checkpoint = json.load(file)
-		file.close()
+		with open(self.hill_climb_checkpoint_file) as file:
+			checkpoint = json.load(file)
 		return [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
