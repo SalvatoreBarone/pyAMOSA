@@ -24,7 +24,7 @@ class BNH(AMOSA.Problem):
     n_var = 2
 
     def __init__(self):
-        AMOSA.Problem.__init__(self, BNH.n_var, [AMOSA.Type.REAL] * BNH.n_var, [0] * BNH.n_var, [5, 3], 2, 2)
+        AMOSA.Problem.__init__(self, BNH.n_var, [AMOSA.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
 
     def evaluate(self, x, out):
         f1 = 4 * x[0] ** 2 + 4 * x[1] ** 2

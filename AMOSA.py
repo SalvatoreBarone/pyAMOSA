@@ -21,6 +21,7 @@ from enum import Enum
 from multiprocessing import cpu_count, Pool
 from distutils.dir_util import mkpath
 from itertools import islice
+from tqdm import tqdm, trange
 
 
 class MultiFileCacheHandle:
@@ -315,11 +316,9 @@ class AMOSA:
     @staticmethod
     def nondominated_merge(archives):
         nondominated_archive = []
-        AMOSA.print_progressbar(0, len(archives), message = "Merging archives:")
-        for i, archive in enumerate(archives):
+        for archive in tqdm(archives, desc = "Merging archives: ", leave = False):
             for x in archive:
                 AMOSA.add_to_archive(nondominated_archive, x)
-            AMOSA.print_progressbar(i+1, len(archives), message = "Merging archives:")
         return nondominated_archive
 
     @staticmethod
@@ -368,9 +367,7 @@ class AMOSA:
             # then the rest are initialized w/ probabilities proportional to their distances to the first
             # Pick a random point from train data for first centroid
             centroids = [random.choice(archive)]
-            if print_allowed:
-                AMOSA.print_progressbar(1, num_of_clusters, message = "Clustering (centroids):")
-            for n in range(num_of_clusters - 1):
+            for _ in trange(num_of_clusters - 1, desc = "Clustering (centroids):", leave = False) if print_allowed else range(num_of_clusters - 1):
                 # Calculate normalized distances from points to the centroids
                 dists = np.array([np.nansum([np.linalg.norm(np.array(centroid["f"]) - np.array(p["f"])) for centroid in centroids]) for p in archive])
                 try:
@@ -385,12 +382,8 @@ class AMOSA:
                     print(f"Distance: {dists}")
                     print(f"Normalized distance: {dists / np.nansum(dists)}")
                     exit()
-                if print_allowed:
-                    AMOSA.print_progressbar(n, num_of_clusters, message = "Clustering (centroids):")
             # Iterate, adjusting centroids until converged or until passed max_iter
-            if print_allowed:
-                AMOSA.print_progressbar(0, max_iterations, message = "Clustering (kmeans):")
-            for n in range(max_iterations):
+            for _ in trange(max_iterations, desc = "Clustering (kmeans):", leave = False) if print_allowed else range(max_iterations):
                 # Sort each datapoint, assigning to nearest centroid
                 sorted_points = [[] for _ in range(num_of_clusters)]
                 for x in archive:
@@ -400,12 +393,8 @@ class AMOSA:
                 # Push current centroids to previous, reassign centroids as mean of the points belonging to them
                 prev_centroids = centroids
                 centroids = [AMOSA.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
-                if print_allowed:
-                    AMOSA.print_progressbar(n, max_iterations, message = "Clustering (kmeans):")
                 if np.array_equal(centroids, prev_centroids) and print_allowed:
-                    AMOSA.print_progressbar(max_iterations, max_iterations, message = "Clustering (kmeans):")
                     break
-            print("", end = "\r", flush = True)
             return centroids
         elif num_of_clusters == 1:
             return [AMOSA.centroid_of_set(archive)]
@@ -571,20 +560,17 @@ class AMOSA:
     def __initial_hill_climbing(self, problem, initial_candidate_solutions):
         num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
         if self.__hill_climbing_iterations > 0:
-            AMOSA.print_progressbar(len(initial_candidate_solutions), num_of_initial_candidate_solutions, message = "Hill climbing:")
             if self.__multiprocessing_enables:
                 args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
-                for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count()):
+                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing:", leave = False):
                     with Pool(cpu_count()) as pool:
                         new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
                     initial_candidate_solutions += new_points
                     self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-                    AMOSA.print_progressbar(i+cpu_count(), num_of_initial_candidate_solutions, message = "Hill climbing:")
             else:
-                for i in range(len(initial_candidate_solutions), num_of_initial_candidate_solutions):
+                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, desc = "Hill climbing:", leave = False):
                     initial_candidate_solutions.append(AMOSA.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
                     self.__save_checkpoint_hillclimb(initial_candidate_solutions)
-                    AMOSA.print_progressbar(i, num_of_initial_candidate_solutions, message = "Hill climbing:")
         for x in initial_candidate_solutions:
             AMOSA.add_to_archive(self.__archive, x)
 
@@ -616,9 +602,7 @@ class AMOSA:
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
-        if print_allowed:
-            AMOSA.print_progressbar(0, annealing_iterations, message = "Annealing:")
-        for iter in range(annealing_iterations):
+        for _ in trange(annealing_iterations, desc = "Annealing:", leave = False) if print_allowed else range(annealing_iterations):
             new_point = AMOSA.random_perturbation(problem, current_point, annealing_strength)
             fitness_range = AMOSA.compute_fitness_range(archive, current_point, new_point)
             s_dominating_y = [s for s in archive if AMOSA.dominates(s, new_point)]
@@ -651,8 +635,6 @@ class AMOSA:
                         archive = AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
             else:
                 raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-            if print_allowed:
-                AMOSA.print_progressbar(iter+1, annealing_iterations, message = "Annealing:")
         return AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed) if clustering_before_return else archive
 
     @staticmethod
@@ -665,13 +647,6 @@ class AMOSA:
             print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
             print("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
             print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
-
-    @staticmethod
-    def print_progressbar(current, total, step = 2, message = ""):
-        progress = current * 100 // total // step
-        remaining = (100 // step) - progress
-        #print(f"   {message}  ({current}/{total})  [{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
-        print(f"   {message} [{'#' * progress}{' ' * remaining}] {progress * step}% {' ' * 30}", end = "\r", flush = True)
 
     def __compute_deltas(self):
         objectives = np.array([s["f"] for s in self.__archive])

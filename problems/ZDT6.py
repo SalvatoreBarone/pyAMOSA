@@ -23,7 +23,7 @@ class ZDT6(AMOSA.Problem):
     n_var = 10
 
     def __init__(self):
-        AMOSA.Problem.__init__(self, ZDT6.n_var, [AMOSA.Type.REAL] * ZDT6.n_var, [0] * ZDT6.n_var, [1] * ZDT6.n_var, 2, 0)
+        AMOSA.Problem.__init__(self, ZDT6.n_var, [AMOSA.Type.REAL] * ZDT6.n_var, [0.0] * ZDT6.n_var, [1.0] * ZDT6.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = 1 - np.exp(-4 * x[0]) * np.power(np.sin(6 * np.pi * x[0]), 6)

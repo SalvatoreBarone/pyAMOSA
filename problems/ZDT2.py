@@ -23,7 +23,7 @@ class ZDT2(AMOSA.Problem):
     n_var = 30
 
     def __init__(self):
-        AMOSA.Problem.__init__(self, ZDT2.n_var, [AMOSA.Type.REAL] * ZDT2.n_var, [0] * ZDT2.n_var, [1] * ZDT2.n_var, 2, 0)
+        AMOSA.Problem.__init__(self, ZDT2.n_var, [AMOSA.Type.REAL] * ZDT2.n_var, [0.0] * ZDT2.n_var, [1.0] * ZDT2.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]

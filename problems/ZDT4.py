@@ -22,7 +22,7 @@ from AMOSA import *
 class ZDT4(AMOSA.Problem):
     n_var = 10
     def __init__(self):
-        AMOSA.Problem.__init__(self, ZDT4.n_var, [AMOSA.Type.REAL] * ZDT4.n_var, [0, -10, -10, -10, -10, -10, -10, -10, -10, -10], [1, 10, 10, 10, 10, 10, 10, 10, 10, 10], 2, 0)
+        AMOSA.Problem.__init__(self, ZDT4.n_var, [AMOSA.Type.REAL] * ZDT4.n_var, [0.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0, -10.0], [1.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0], 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]

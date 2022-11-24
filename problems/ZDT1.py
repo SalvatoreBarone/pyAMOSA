@@ -24,7 +24,7 @@ class ZDT1(AMOSA.Problem):
 
     def __init__(self):
 
-        AMOSA.Problem.__init__(self, ZDT1.n_var, [AMOSA.Type.REAL] * ZDT1.n_var, [0]*ZDT1.n_var, [1] * ZDT1.n_var, 2, 0)
+        AMOSA.Problem.__init__(self, ZDT1.n_var, [AMOSA.Type.REAL] * ZDT1.n_var, [0.0]*ZDT1.n_var, [1.0] * ZDT1.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
