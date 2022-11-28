@@ -14,17 +14,14 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from AMOSA import *
+import os, sys, pyamosa, numpy as np
 
 
-
-class BNH(AMOSA.Problem):
+class BNH(pyamosa.Optimizer.Problem):
     n_var = 2
 
     def __init__(self):
-        AMOSA.Problem.__init__(self, BNH.n_var, [AMOSA.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
+        pyamosa.Optimizer.Problem.__init__(self, BNH.n_var, [pyamosa.Optimizer.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
 
     def evaluate(self, x, out):
         f1 = 4 * x[0] ** 2 + 4 * x[1] ** 2
@@ -40,9 +37,9 @@ class BNH(AMOSA.Problem):
                     "f": [0] * self.num_of_objectives,
                     "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None} for x in pareto_set ]
         pareto_set = np.linspace(3, 5, 100)
-        out = out + [{  "x": [x, 3],
-                        "f": [0] * self.num_of_objectives,
-                        "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None} for x in pareto_set ]
+        out += [{  "x": [x, 3],
+                   "f": [0] * self.num_of_objectives,
+                   "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None} for x in pareto_set ]
         for o in out:
             self.evaluate(o["x"], o)
         return out

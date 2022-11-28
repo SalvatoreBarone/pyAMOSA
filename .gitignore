@@ -3,3 +3,6 @@ __pycache__
 *.csv
 *.pdf
 .vscode/
+build/
+dist
+pyAMOSA.egg-info/

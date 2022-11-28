@@ -1,6 +1,12 @@
 # pyAMOSA 
 pyAMOSA is a python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic [1].
 
+## Installing the module
+You can install this module by simply running the provided ```setup.py``` script as follows:
+```bash
+# python3 setup.py install
+```
+
 ## Defining and solving a problem
 
 In pyAMOSA a problem is defined by an object that contains some metadata, for instance the number of decision variables, 
@@ -40,12 +46,12 @@ with
 
 
 ```python
-from AMOSA import *
+import pyamosa
 
-class ZDT1(AMOSA.Problem):
+class ZDT1(pyamosa.Optimizer.Problem):
     def __init__(self):
         n_var = 30
-        AMOSA.Problem.__init__(self, 30, [AMOSA.Type.REAL] * 30, [0] * 30, [1] * 30, 2, 0)
+        pyamosa.Optimizer..Problem.__init__(self, 30, [pyamosa.Optimizer..Type.REAL] * 30, [0] * 30, [1] * 30, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
@@ -59,14 +65,14 @@ Now, you have to build a proper problem object and also an optimization-engine, 
 if __name__ == "__main__":
     problem = ZDT1()
 
-    optimizer = AMOSA(...)
+    optimizer = pyamosa.Optimizer(...)
 ```
 
-The ```AMOSA``` class allows setting a vast plethora of configuration parameters governing the behavior of the 
-heuristic. You must do it by creating an ```AMOSAConfig``` object, as follows
+The ```pyamosa.Optimizer``` class allows setting a vast plethora of configuration parameters governing the behavior of the 
+heuristic. You must do it by creating an ```pyamosa.Optimizer.Config``` object, as follows
 
 ```python
-    config = AMOSAConfig()
+    config = pyamosa.Optimizer.Config()
     config.archive_hard_limit = 100
     config.archive_soft_limit = 200
     config.archive_gamma = 2
@@ -99,8 +105,8 @@ Now you can proceed solving the problem.
     optimizer.run(problem)
 ```
 At the end of execution, you can access the Pareto-front and the Pareto-set through the ```pareto_front()``` and 
-```pareto_set()``` methods of the ```AMOSA``` class. You can also save the archive on CSV or JSON files, using the 
-```archive_to_csv()``` or the ```archive_to_json``` method. The class also provides the ```plot_pareto()```, that plots
+```pareto_set()``` methods of the ```pyamosa.Optimizer``` class. You can also save the archive on CSV or JSON files, using the 
+```archive_to_csv()``` or the ```archive_to_json()``` methods. The class also provides the ```plot_pareto()```, that plots
 the Pareto-front resulting from the run.
 
 ## Constraint handling
@@ -119,7 +125,7 @@ converted in the less-or-equal form, thus <img src="https://render.githubusercon
 As objective-functions, constraints evaluation also takes place in the ```evaluate ``` method. You can fill the 
 ```out``` dictionary as follows.
 ```
-class Problem(AMOSA.Problem):
+class Problem(pyamosa.Optimizer.Problem):
     ...    
     def evaluate(self, x, out):
         ...

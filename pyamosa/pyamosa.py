@@ -14,9 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, os, json, warnings, math
-import numpy as np
-import matplotlib.pyplot as plt
+import sys, copy, random, time, os, json, warnings, math, numpy as np, matplotlib.pyplot as plt
 from enum import Enum
 from multiprocessing import cpu_count, Pool
 from distutils.dir_util import mkpath
@@ -60,52 +58,51 @@ class MultiFileCacheHandle:
     @staticmethod
     def chunks(data, max_entries):
         it = iter(data)
-        for i in range(0, len(data), max_entries):
+        for _ in range(0, len(data), max_entries):
             yield {k: data[k] for k in islice(it, max_entries)}
 
-class AMOSAConfig:
-    def __init__(
-            self,
-            archive_hard_limit = 20,
-            archive_soft_limit = 50,
-            archive_gamma = 2,
-            clustering_max_iterations = 300,
-            hill_climbing_iterations = 500,
-            initial_temperature = 500,
-            final_temperature = 0.000001,
-            cooling_factor = 0.9,
-            annealing_iterations = 500,
-            annealing_strength = 1,
-            early_termination_window = 0,
-            multiprocessing_enabled = True
-    ):
-        assert archive_soft_limit >= archive_hard_limit > 0, f"soft limit: {archive_soft_limit}, hard limit: {archive_hard_limit}"
-        assert archive_gamma > 0, f"gamma: {archive_gamma}"
-        assert clustering_max_iterations > 0, f"clustering iterations: {clustering_max_iterations}"
-        assert hill_climbing_iterations >= 0, f"hill-climbing iterations: {hill_climbing_iterations}"
-        assert initial_temperature > final_temperature > 0, f"initial temperature: {initial_temperature}, final temperature: {final_temperature}"
-        assert 0 < cooling_factor < 1, f"cooling factor: {cooling_factor}"
-        assert annealing_iterations > 0, f"annealing iterations: {annealing_strength}"
-        assert annealing_strength >= 1, f"annealing strength: {annealing_strength}"
-        assert early_termination_window >= 0, f"early-termination window: {early_termination_window}"
-        self.archive_hard_limit = archive_hard_limit
-        self.archive_soft_limit = archive_soft_limit
-        self.clustering_max_iterations = clustering_max_iterations
-        self.archive_gamma = archive_gamma
-        self.hill_climbing_iterations = hill_climbing_iterations
-        self.initial_temperature = initial_temperature
-        self.final_temperature = final_temperature
-        self.cooling_factor = cooling_factor
-        self.annealing_iterations = annealing_iterations
-        self.annealing_strength = annealing_strength
-        self.early_terminator_window = early_termination_window
-        self.multiprocessing_enabled = multiprocessing_enabled
-
-
-class AMOSA:
+class Optimizer:
     hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
     minimize_checkpoint_file = "minimize_checkpoint.json"
     cache_dir = ".cache"
+
+    class Config:
+        def __init__(
+                self,
+                archive_hard_limit = 20,
+                archive_soft_limit = 50,
+                archive_gamma = 2,
+                clustering_max_iterations = 300,
+                hill_climbing_iterations = 500,
+                initial_temperature = 500,
+                final_temperature = 0.000001,
+                cooling_factor = 0.9,
+                annealing_iterations = 500,
+                annealing_strength = 1,
+                early_termination_window = 0,
+                multiprocessing_enabled = True
+        ):
+            assert archive_soft_limit >= archive_hard_limit > 0, f"soft limit: {archive_soft_limit}, hard limit: {archive_hard_limit}"
+            assert archive_gamma > 0, f"gamma: {archive_gamma}"
+            assert clustering_max_iterations > 0, f"clustering iterations: {clustering_max_iterations}"
+            assert hill_climbing_iterations >= 0, f"hill-climbing iterations: {hill_climbing_iterations}"
+            assert initial_temperature > final_temperature > 0, f"initial temperature: {initial_temperature}, final temperature: {final_temperature}"
+            assert 0 < cooling_factor < 1, f"cooling factor: {cooling_factor}"
+            assert annealing_iterations > 0, f"annealing iterations: {annealing_strength}"
+            assert annealing_strength >= 1, f"annealing strength: {annealing_strength}"
+            assert early_termination_window >= 0, f"early-termination window: {early_termination_window}"
+            self.archive_hard_limit = archive_hard_limit
+            self.archive_soft_limit = archive_soft_limit
+            self.clustering_max_iterations = clustering_max_iterations
+            self.archive_gamma = archive_gamma
+            self.hill_climbing_iterations = hill_climbing_iterations
+            self.initial_temperature = initial_temperature
+            self.final_temperature = final_temperature
+            self.cooling_factor = cooling_factor
+            self.annealing_iterations = annealing_iterations
+            self.annealing_strength = annealing_strength
+            self.early_terminator_window = early_termination_window
+            self.multiprocessing_enabled = multiprocessing_enabled
 
     class Type(Enum):
         INTEGER = 0
@@ -120,11 +117,11 @@ class AMOSA:
             self.num_of_objectives = num_of_objectives
             self.num_of_constraints = num_of_constraints
             for t in types:
-                assert t in [AMOSA.Type.INTEGER, AMOSA.Type.REAL], "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
+                assert t in [Optimizer.Type.INTEGER, Optimizer.Type.REAL], "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
             self.types = types
             for lb, ub, t in zip(lower_bounds, upper_bounds, self.types):
-                assert isinstance(lb, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
-                assert isinstance(ub, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
+                assert isinstance(lb, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
+                assert isinstance(ub, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
             self.lower_bound = lower_bounds
             self.upper_bound = upper_bounds
             self.cache = {}
@@ -172,7 +169,7 @@ class AMOSA:
     @staticmethod
     def get_objectives(problem, s):
         for i, t in zip(s["x"], problem.types):
-            assert isinstance(i, int if t == AMOSA.Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
+            assert isinstance(i, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
         problem.total_calls += 1
         # if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
         if problem.is_cached(s):
@@ -192,7 +189,7 @@ class AMOSA:
         if x["g"] is None:
             return all(i <= j for i, j in zip(x["f"], y["f"])) and any(i < j for i, j in zip(x["f"], y["f"]))
         else:
-            return AMOSA.x_is_feasible_while_y_is_nor(x, y) or AMOSA.both_infeasible_but_x_is_better(x, y) or AMOSA.both_feasible_but_x_is_better(x, y)
+            return Optimizer.x_is_feasible_while_y_is_nor(x, y) or Optimizer.both_infeasible_but_x_is_better(x, y) or Optimizer.both_feasible_but_x_is_better(x, y)
 
     @staticmethod
     def x_is_feasible_while_y_is_nor(x, y):
@@ -209,19 +206,19 @@ class AMOSA:
     @staticmethod
     def lower_point(problem):
         x = {"x": problem.lower_bound, "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
-        AMOSA.get_objectives(problem, x)
+        Optimizer.get_objectives(problem, x)
         return x
 
     @staticmethod
     def upper_point(problem):
         x = {"x": problem.upper_bound, "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
-        AMOSA.get_objectives(problem, x)
+        Optimizer.get_objectives(problem, x)
         return x
 
     @staticmethod
     def random_point(problem):
-        x = {"x": [lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub) for lb, ub, tp in zip(problem.lower_bound, problem.upper_bound, problem.types)], "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
-        AMOSA.get_objectives(problem, x)
+        x = {"x": [lb if lb == ub else random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub) for lb, ub, tp in zip(problem.lower_bound, problem.upper_bound, problem.types)], "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+        Optimizer.get_objectives(problem, x)
         return x
 
     @staticmethod
@@ -237,8 +234,8 @@ class AMOSA:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]
                 tp = problem.types[i]
-                z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == AMOSA.Type.INTEGER else random.uniform(lb, ub)
-        AMOSA.get_objectives(problem, z)
+                z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
+        Optimizer.get_objectives(problem, z)
         return z
 
     @staticmethod
@@ -260,14 +257,14 @@ class AMOSA:
 
     @staticmethod
     def hill_climbing(problem, x, max_iterations):
-        d, up = AMOSA.hill_climbing_direction(problem)
+        d, up = Optimizer.hill_climbing_direction(problem)
         for _ in range(max_iterations):
             y = copy.deepcopy(x)
-            AMOSA.hill_climbing_adaptive_step(problem, y, d, up)
-            if AMOSA.dominates(y, x) and AMOSA.not_the_same(y, x):
+            Optimizer.hill_climbing_adaptive_step(problem, y, d, up)
+            if Optimizer.dominates(y, x) and Optimizer.not_the_same(y, x):
                 x = y
             else:
-                d, up = AMOSA.hill_climbing_direction(problem, d)
+                d, up = Optimizer.hill_climbing_direction(problem, d)
         return x
 
     @staticmethod
@@ -291,7 +288,7 @@ class AMOSA:
             upper_bound = problem.upper_bound[d] - s["x"][d]
             if (up == -1 and lower_bound == 0) or (up == 1 and upper_bound == 0):
                 return 0
-            if problem.types[d] == AMOSA.Type.INTEGER:
+            if problem.types[d] == Optimizer.Type.INTEGER:
                 step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
                 while step == 0:
                     step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
@@ -300,7 +297,7 @@ class AMOSA:
                 while step == 0:
                     step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
             s["x"][d] += step
-        AMOSA.get_objectives(problem, s)
+        Optimizer.get_objectives(problem, s)
 
     @staticmethod
     def add_to_archive(archive, x):
@@ -308,9 +305,9 @@ class AMOSA:
             archive.append(x)
         else:
             for y in archive:
-                if AMOSA.dominates(x, y):
+                if Optimizer.dominates(x, y):
                     archive.remove(y)
-            if not any(AMOSA.dominates(y, x) or AMOSA.is_the_same(x, y) for y in archive):
+            if not any(Optimizer.dominates(y, x) or Optimizer.is_the_same(x, y) for y in archive):
                 archive.append(x)
 
     @staticmethod
@@ -318,7 +315,7 @@ class AMOSA:
         nondominated_archive = []
         for archive in tqdm(archives, desc = "Merging archives: ", leave = False):
             for x in archive:
-                AMOSA.add_to_archive(nondominated_archive, x)
+                Optimizer.add_to_archive(nondominated_archive, x)
         return nondominated_archive
 
     @staticmethod
@@ -338,19 +335,19 @@ class AMOSA:
     def remove_dominated(archive):
         nondominated_archive = []
         for x in archive:
-            AMOSA.add_to_archive(nondominated_archive, x)
+            Optimizer.add_to_archive(nondominated_archive, x)
         return nondominated_archive
 
     @staticmethod
     def clustering(archive, problem, hard_limit, max_iterations, print_allowed):
         if problem.num_of_constraints == 0:
-            return AMOSA.kmeans_clustering(archive, hard_limit, max_iterations, print_allowed)
+            return Optimizer.kmeans_clustering(archive, hard_limit, max_iterations, print_allowed)
         feasible = [s for s in archive if all(g <= 0 for g in s["g"])]
         unfeasible = [s for s in archive if any(g > 0 for g in s["g"])]
         if len(feasible) > hard_limit:
-            return AMOSA.kmeans_clustering(feasible, hard_limit, max_iterations, print_allowed)
+            return Optimizer.kmeans_clustering(feasible, hard_limit, max_iterations, print_allowed)
         elif len(feasible) < hard_limit and len(unfeasible) != 0:
-            return feasible + AMOSA.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations, print_allowed)
+            return feasible + Optimizer.kmeans_clustering(unfeasible, hard_limit - len(feasible), max_iterations, print_allowed)
         else:
             return feasible
 
@@ -392,12 +389,12 @@ class AMOSA:
                     sorted_points[centroid_idx].append(x)
                 # Push current centroids to previous, reassign centroids as mean of the points belonging to them
                 prev_centroids = centroids
-                centroids = [AMOSA.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
+                centroids = [Optimizer.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
                 if np.array_equal(centroids, prev_centroids) and print_allowed:
                     break
             return centroids
         elif num_of_clusters == 1:
-            return [AMOSA.centroid_of_set(archive)]
+            return [Optimizer.centroid_of_set(archive)]
         else:
             return archive
 
@@ -453,7 +450,7 @@ class AMOSA:
             problem.archive_to_cache(initial_candidate)
             self.__initial_hill_climbing(problem, initial_candidate)
             if len(self.__archive) > self.__archive_hard_limit:
-                self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
+                self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
             self.__save_checkpoint_minimize()
             if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
@@ -461,7 +458,7 @@ class AMOSA:
             self.__archive_from_json(problem, improve)
             problem.archive_to_cache(self.__archive)
             if len(self.__archive) > self.__archive_hard_limit:
-                self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
+                self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
             self.__save_checkpoint_minimize()
             if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
@@ -471,16 +468,16 @@ class AMOSA:
             if remove_checkpoints:
                 os.remove(self.hill_climb_checkpoint_file)
         assert len(self.__archive) > 0, "Archive not initialized"
-        AMOSA.print_header(problem)
+        Optimizer.print_header(problem)
         self.__print_statistics(problem)
         self.__main_loop(problem, plot)
         self.__fig = None
         self.__ax = None
         self.__line = None
-        self.__archive = AMOSA.remove_infeasible(problem, self.__archive)
-        self.__archive = AMOSA.remove_dominated(self.__archive)
+        self.__archive = Optimizer.remove_infeasible(problem, self.__archive)
+        self.__archive = Optimizer.remove_dominated(self.__archive)
         if len(self.__archive) > self.__archive_hard_limit:
-            self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
+            self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
         self.__print_statistics(problem)
         self.duration = time.time() - self.duration
         problem.store_cache(self.cache_dir)
@@ -541,21 +538,21 @@ class AMOSA:
 
     def __random_archive(self, problem):
         print("Initializing random archive...")
-        initial_candidate_solutions = [AMOSA.lower_point(problem), AMOSA.upper_point(problem)]
+        initial_candidate_solutions = [Optimizer.lower_point(problem), Optimizer.upper_point(problem)]
         self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
     def __archive_from_json(self, problem, json_file):
         print("Initializing archive from JSON file...")
         with open(json_file) as f:
             archive = json.load(f)
-        initial_candidate_solutions = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
+        initial_candidate_solutions = [{"x": [int(i) if j == Optimizer.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
         self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
     def read_final_archive_from_json(self, problem, json_file):
         print("Reading archive from JSON file...")
         with open(json_file) as file:
             archive = json.load(file)
-        self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
+        self.__archive = [{"x": [int(i) if j == Optimizer.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 
     def __initial_hill_climbing(self, problem, initial_candidate_solutions):
         num_of_initial_candidate_solutions = self.__archive_gamma * self.__archive_soft_limit
@@ -564,19 +561,19 @@ class AMOSA:
                 args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
                 for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing:", leave = False):
                     with Pool(cpu_count()) as pool:
-                        new_points = pool.starmap(AMOSA.hillclimb_thread_loop, args)
+                        new_points = pool.starmap(Optimizer.hillclimb_thread_loop, args)
                     initial_candidate_solutions += new_points
                     self.__save_checkpoint_hillclimb(initial_candidate_solutions)
             else:
                 for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, desc = "Hill climbing:", leave = False):
-                    initial_candidate_solutions.append(AMOSA.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
+                    initial_candidate_solutions.append(Optimizer.hillclimb_thread_loop(problem, self.__hill_climbing_iterations))
                     self.__save_checkpoint_hillclimb(initial_candidate_solutions)
         for x in initial_candidate_solutions:
-            AMOSA.add_to_archive(self.__archive, x)
+            Optimizer.add_to_archive(self.__archive, x)
 
     @staticmethod
     def hillclimb_thread_loop(problem, hillclimb_iterations):
-        return AMOSA.hill_climbing(problem, AMOSA.random_point(problem), hillclimb_iterations)
+        return Optimizer.hill_climbing(problem, Optimizer.random_point(problem), hillclimb_iterations)
 
     def __main_loop(self, problem, plot):
         current_point = random.choice(self.__archive)
@@ -584,17 +581,17 @@ class AMOSA:
             if self.__multiprocessing_enables:
                 args = [[problem, self.__archive.copy(), random.choice(self.__archive), self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, True, i] for i in [t == 0 for t in range(cpu_count())]]
                 with Pool(cpu_count()) as pool:
-                    archives = pool.starmap(AMOSA.annealing_thread_loop, args)
-                self.__archive = AMOSA.nondominated_merge(archives)
+                    archives = pool.starmap(Optimizer.annealing_thread_loop, args)
+                self.__archive = Optimizer.nondominated_merge(archives)
                 self.__n_eval += self.__annealing_iterations * cpu_count()
             else:
-                self.__archive = AMOSA.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, False, True)
+                self.__archive = Optimizer.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, False, True)
                 self.__n_eval += self.__annealing_iterations
             self.__print_statistics(problem)
             if plot:
                 self.__continuous_plot(problem)
             if len(self.__archive) > self.__archive_soft_limit:
-                self.__archive = AMOSA.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
+                self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
                 self.__print_statistics(problem)
             self.__save_checkpoint_minimize()
             problem.store_cache(self.cache_dir)
@@ -603,39 +600,39 @@ class AMOSA:
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
         for _ in trange(annealing_iterations, desc = "Annealing:", leave = False) if print_allowed else range(annealing_iterations):
-            new_point = AMOSA.random_perturbation(problem, current_point, annealing_strength)
-            fitness_range = AMOSA.compute_fitness_range(archive, current_point, new_point)
-            s_dominating_y = [s for s in archive if AMOSA.dominates(s, new_point)]
-            s_dominated_by_y = [s for s in archive if AMOSA.dominates(new_point, s)]
+            new_point = Optimizer.random_perturbation(problem, current_point, annealing_strength)
+            fitness_range = Optimizer.compute_fitness_range(archive, current_point, new_point)
+            s_dominating_y = [s for s in archive if Optimizer.dominates(s, new_point)]
+            s_dominated_by_y = [s for s in archive if Optimizer.dominates(new_point, s)]
             k_s_dominated_by_y = len(s_dominated_by_y)
             k_s_dominating_y = len(s_dominating_y)
-            if AMOSA.dominates(current_point, new_point) and k_s_dominating_y >= 0:
-                delta_avg = (np.nansum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + AMOSA.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
-                if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
+            if Optimizer.dominates(current_point, new_point) and k_s_dominating_y >= 0:
+                delta_avg = (np.nansum([Optimizer.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) + Optimizer.domination_amount(current_point, new_point, fitness_range)) / (k_s_dominating_y + 1)
+                if Optimizer.accept(Optimizer.sigmoid(-delta_avg * current_temperature)):
                     current_point = new_point
-            elif not AMOSA.dominates(current_point, new_point) and not AMOSA.dominates(new_point, current_point):
+            elif not Optimizer.dominates(current_point, new_point) and not Optimizer.dominates(new_point, current_point):
                 if k_s_dominating_y >= 1:
-                    delta_avg = np.nansum([AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
-                    if AMOSA.accept(AMOSA.sigmoid(-delta_avg * current_temperature)):
+                    delta_avg = np.nansum([Optimizer.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]) / k_s_dominating_y
+                    if Optimizer.accept(Optimizer.sigmoid(-delta_avg * current_temperature)):
                         current_point = new_point
                 elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
-                    AMOSA.add_to_archive(archive, new_point)
+                    Optimizer.add_to_archive(archive, new_point)
                     current_point = new_point
                     if len(archive) > soft_limit:
-                        archive = AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
-            elif AMOSA.dominates(new_point, current_point):
+                        archive = Optimizer.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
+            elif Optimizer.dominates(new_point, current_point):
                 if k_s_dominating_y >= 1:
-                    delta_dom = [AMOSA.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
-                    if AMOSA.accept(AMOSA.sigmoid(min(delta_dom))):
+                    delta_dom = [Optimizer.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
+                    if Optimizer.accept(Optimizer.sigmoid(min(delta_dom))):
                         current_point = archive[np.argmin(delta_dom)]
                 elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
-                    AMOSA.add_to_archive(archive, new_point)
+                    Optimizer.add_to_archive(archive, new_point)
                     current_point = new_point
                     if len(archive) > soft_limit:
-                        archive = AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
+                        archive = Optimizer.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed)
             else:
-                raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {AMOSA.dominates(current_point, new_point)}\n y < x: {AMOSA.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
-        return AMOSA.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed) if clustering_before_return else archive
+                raise RuntimeError(f"Something went wrong\narchive: {archive}\nx:{current_point}\ny: {new_point}\n x < y: {Optimizer.dominates(current_point, new_point)}\n y < x: {Optimizer.dominates(new_point, current_point)}\ny domination rank: {k_s_dominated_by_y}\narchive domination rank: {k_s_dominating_y}")
+        return Optimizer.clustering(archive, problem, hard_limit, clustering_max_iterations, print_allowed) if clustering_before_return else archive
 
     @staticmethod
     def print_header(problem):
@@ -659,7 +656,7 @@ class AMOSA:
             if self.__nadir is not None and self.__ideal is not None and self.__old_norm_objectives is not None and len(self.__old_norm_objectives) != 0:
                 delta_nad = np.nanmax([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.__nadir, nadir, ideal)])
                 delta_ideal = np.nanmax([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.__ideal, ideal, self.__nadir)])
-                phy = AMOSA.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
+                phy = Optimizer.inverted_generational_distance(self.__old_norm_objectives, normalized_objectives)
                 self.__phy.append(phy)
                 retvalue = (delta_nad, delta_ideal, phy)
             self.__nadir = nadir
@@ -678,7 +675,7 @@ class AMOSA:
         if problem.num_of_constraints == 0:
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
         else:
-            feasible, cv_min, cv_avg = AMOSA.compute_cv(self.__archive)
+            feasible, cv_min, cv_avg = Optimizer.compute_cv(self.__archive)
             print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __continuous_plot(self, problem):
@@ -756,10 +753,10 @@ class AMOSA:
         self.__nadir = [float(i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
         self.__old_norm_objectives = checkpoint["norm"]
         self.__phy = [float(i) for i in checkpoint["phy"]]
-        self.__archive = [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]
+        self.__archive = [{"x": [int(i) if j == Optimizer.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]
 
     def __read_checkpoint_hill_climb(self, problem):
         print("Resuming hill-climbing from checkpoint...")
         with open(self.hill_climb_checkpoint_file) as file:
             checkpoint = json.load(file)
-        return [{"x": [int(i) if j == AMOSA.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
+        return [{"x": [int(i) if j == Optimizer.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]

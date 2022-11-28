@@ -14,14 +14,12 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from AMOSA import *
+import os, sys, pyamosa, numpy as np
 
 
-class OSY(AMOSA.Problem):
+class OSY(pyamosa.Optimizer.Problem):
     def __init__(self):
-        AMOSA.Problem.__init__(self, 6, [AMOSA.Type.REAL] * 6, [0.0, 0.0, 1.0, 0.0, 1.0, 0.0], [10.0, 10.0, 5.0, 6.0, 5.0, 10.0], 2, 6)
+        pyamosa.Optimizer.Problem.__init__(self, 6, [pyamosa.Optimizer.Type.REAL] * 6, [0.0, 0.0, 1.0, 0.0, 1.0, 0.0], [10.0, 10.0, 5.0, 6.0, 5.0, 10.0], 2, 6)
 
     def evaluate(self, x, out):
         f1 = -(25 * (x[0] - 2) ** 2 + (x[1] - 2) ** 2 + (x[2] - 1) ** 2 + (x[3] - 4) ** 2 + (x[4] - 1) ** 2 )

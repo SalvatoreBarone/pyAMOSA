@@ -14,24 +14,21 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from AMOSA import *
+import os, sys, pyamosa, numpy as np
 
 
-class ZDT3(AMOSA.Problem):
+class ZDT3(pyamosa.Optimizer.Problem):
     n_var = 30
 
     def __init__(self):
 
-        AMOSA.Problem.__init__(self, ZDT3.n_var, [AMOSA.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
+        pyamosa.Optimizer.Problem.__init__(self, ZDT3.n_var, [pyamosa.Optimizer.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
         g = 1 + 9 * sum(x[1:]) / (self.num_of_variables - 1)
         h = 1 - np.sqrt(f / g) - (f / g) * np.sin(10* np.pi * f)
         out["f"] = [f, g * h ]
-        pass
 
     def optimums(self):
         """
