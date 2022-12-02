@@ -664,11 +664,12 @@ class Optimizer:
             self.__old_norm_objectives = normalized_objectives
             return retvalue
         except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
-            print(e)
-            print(f"Objectives: {objectives}")
-            print (f"Nadir: {nadir}, Ideal: {ideal}")
-            print(f"Normalized objectives: {normalized_objectives}")
-            exit()
+            # print(e)
+            # print(f"Objectives: {objectives}")
+            # print (f"Nadir: {nadir}, Ideal: {ideal}")
+            # print(f"Normalized objectives: {normalized_objectives}")
+            # exit()
+            return (0, 0, 0)
 
     def __print_statistics(self, problem):
         delta_nad, delta_ideal, phy = self.__compute_deltas()
