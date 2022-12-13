@@ -12,18 +12,18 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="pyAMOSA",
-    version="1.0.0",
+    version="1.0.1",
     description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic",
-    long_description=long_description,
+    long_description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic. Take a look at https://github.com/SalvatoreBarone/pyAMOSA.",
     url="https://github.com/SalvatoreBarone/pyAMOSA",
     author="Salvatore Barone",
     author_email="salvatore.barone@unina.it",
     # https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
-        "Intended Audience :: Researchers",
-        "Intended Audience :: Engineers",
-        "Topic :: Multi-Objective Optimization",
-        "License :: GNU GPLv3",
+        "Intended Audience :: Information Technology",
+        "Intended Audience :: Science/Research",
+        "Topic :: Scientific/Engineering",
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Programming Language :: Python :: 3.9"
     ],
     keywords="Verilator Wrapper Verilog",

@@ -6,3 +6,5 @@ __pycache__
 build/
 dist
 pyAMOSA.egg-info/
+
+virtualenv/
