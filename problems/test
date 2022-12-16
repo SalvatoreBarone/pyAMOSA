@@ -68,9 +68,8 @@ def evaluate(prob):
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
 @click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
 @click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
-@click.option('--plot', is_flag = True, help = 'Enable continuous plot')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, plot, attempts):
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts):
     """ Run a test problem """
     problem = problems[prob]
     config = pyamosa.Optimizer.Config
@@ -86,13 +85,14 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     config.annealing_strength = strg
     config.early_terminator_window = win
     config.multiprocessing_enabled = False
+    print(f"Using pyamosa {pyamosa.__version__}")
     optimizer = pyamosa.Optimizer(config)
     optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
     optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
     optimizer.cache_dir = f".{prob}_cache"
     if attempts != 0:
         problem.max_attempt = attempts
-    optimizer.run(problem, improve = json_file, plot = plot)
+    optimizer.run(problem, improve = json_file)
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
     optimizer.archive_to_json(f"{prob}_final_archive.json")

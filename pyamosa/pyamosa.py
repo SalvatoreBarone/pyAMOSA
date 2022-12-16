@@ -300,6 +300,13 @@ class Optimizer:
         Optimizer.get_objectives(problem, s)
 
     @staticmethod
+    def matter_temperatures(initial_temperature, final_temperature, cooling_factor):
+        current_temperature = [initial_temperature]
+        while current_temperature[-1] > final_temperature * cooling_factor:
+            current_temperature.append(float(current_temperature[-1] * cooling_factor))
+        return current_temperature
+
+    @staticmethod
     def add_to_archive(archive, x):
         if len(archive) == 0:
             archive.append(x)
@@ -412,6 +419,7 @@ class Optimizer:
         self.__initial_temperature = config.initial_temperature
         self.__final_temperature = config.final_temperature
         self.__cooling_factor = config.cooling_factor
+        self.__temperature = Optimizer.matter_temperatures(self.__initial_temperature, self.__final_temperature, self.__cooling_factor)
         self.__annealing_iterations = config.annealing_iterations
         self.__annealing_strength = config.annealing_strength
         self.__early_termination_window = config.early_terminator_window
@@ -427,11 +435,9 @@ class Optimizer:
         self.__nadir = None
         self.__old_norm_objectives = []
         self.__phy = []
-        self.__fig = None
-        self.__ax = None
-        self.__line = None
 
-    def run(self, problem, improve = None, remove_checkpoints = True, plot = False):
+
+    def run(self, problem, improve = None, remove_checkpoints = True):
         problem.load_cache(self.cache_dir)
         self.__current_temperature = self.__initial_temperature
         self.__archive = []
@@ -470,12 +476,8 @@ class Optimizer:
         assert len(self.__archive) > 0, "Archive not initialized"
         Optimizer.print_header(problem)
         self.__print_statistics(problem)
-        self.__main_loop(problem, plot)
-        self.__fig = None
-        self.__ax = None
-        self.__line = None
-        self.__archive = Optimizer.remove_infeasible(problem, self.__archive)
-        self.__archive = Optimizer.remove_dominated(self.__archive)
+        self.__main_loop(problem)
+        self.__archive = Optimizer.remove_dominated(Optimizer.remove_infeasible(problem, self.__archive))
         if len(self.__archive) > self.__archive_hard_limit:
             self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
         self.__print_statistics(problem)
@@ -575,9 +577,10 @@ class Optimizer:
     def hillclimb_thread_loop(problem, hillclimb_iterations):
         return Optimizer.hill_climbing(problem, Optimizer.random_point(problem), hillclimb_iterations)
 
-    def __main_loop(self, problem, plot):
+    def __main_loop(self, problem):
         current_point = random.choice(self.__archive)
-        while self.__current_temperature > self.__final_temperature:
+        for t in tqdm(self.__temperature, desc='Main loop', file=sys.stdout, leave=False):
+            self.__current_temperature = t
             if self.__multiprocessing_enables:
                 args = [[problem, self.__archive.copy(), random.choice(self.__archive), self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, True, i] for i in [t == 0 for t in range(cpu_count())]]
                 with Pool(cpu_count()) as pool:
@@ -588,8 +591,6 @@ class Optimizer:
                 self.__archive = Optimizer.annealing_thread_loop(problem, self.__archive, current_point, self.__current_temperature, self.__annealing_iterations, self.__annealing_strength, self.__archive_soft_limit, self.__archive_hard_limit, self.__clustering_max_iterations, False, True)
                 self.__n_eval += self.__annealing_iterations
             self.__print_statistics(problem)
-            if plot:
-                self.__continuous_plot(problem)
             if len(self.__archive) > self.__archive_soft_limit:
                 self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
                 self.__print_statistics(problem)
@@ -599,7 +600,7 @@ class Optimizer:
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
-        for _ in trange(annealing_iterations, desc = "Annealing", leave = False) if print_allowed else range(annealing_iterations):
+        for _ in trange(annealing_iterations, desc = "Annealing", file=sys.stdout, leave = False) if print_allowed else range(annealing_iterations):
             new_point = Optimizer.random_perturbation(problem, current_point, annealing_strength)
             fitness_range = Optimizer.compute_fitness_range(archive, current_point, new_point)
             s_dominating_y = [s for s in archive if Optimizer.dominates(s, new_point)]
@@ -637,13 +638,13 @@ class Optimizer:
     @staticmethod
     def print_header(problem):
         if problem.num_of_constraints == 0:
-            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
-            print("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi"))
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
         else:
-            print("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
-            print("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
-            print("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def __compute_deltas(self):
         objectives = np.array([s["f"] for s in self.__archive])
@@ -664,53 +665,21 @@ class Optimizer:
             self.__old_norm_objectives = normalized_objectives
             return retvalue
         except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
-            # print(e)
-            # print(f"Objectives: {objectives}")
-            # print (f"Nadir: {nadir}, Ideal: {ideal}")
-            # print(f"Normalized objectives: {normalized_objectives}")
-            # exit()
             return (0, 0, 0)
 
     def __print_statistics(self, problem):
         delta_nad, delta_ideal, phy = self.__compute_deltas()
         if problem.num_of_constraints == 0:
-            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), delta_ideal, delta_nad, phy))
         else:
             feasible, cv_min, cv_avg = Optimizer.compute_cv(self.__archive)
-            print("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
-
-    def __continuous_plot(self, problem):
-        F = self.pareto_front()
-        axis_labels = [f"f{str(i)}" for i in range(problem.num_of_objectives)]
-        if self.__fig is None:
-            plt.ion()
-            if problem.num_of_objectives == 2:
-                self.__fig, self.__ax = plt.subplots(figsize = (10, 8))
-                self.__ax.set_xlabel(axis_labels[0])
-                self.__ax.set_ylabel(axis_labels[1])
-                self.__line, = self.__ax.plot(F[:, 0], F[:, 1], 'k.')
-            elif problem.num_of_objectives == 3:
-                self.__fig, self.__ax = plt.subplots(figsize = (10, 8), projection = '3d')
-                self.__ax.set_xlabel(axis_labels[0])
-                self.__ax.set_ylabel(axis_labels[1])
-                self.__ax.set_zlabel(axis_labels[2])
-                self.__line, = self.__ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
-        else:
-            if problem.num_of_objectives == 2:
-                self.__line.set_xdata(F[:, 0])
-                self.__line.set_ydata(F[:, 1])
-            elif problem.num_of_objectives == 3:
-                self.__line.set_xdata(F[:, 0])
-                self.__line.set_ydata(F[:, 1])
-                self.__line.set_zdata(F[:, 2])
-            self.__fig.canvas.draw()
-            self.__fig.canvas.flush_events()
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __check_early_termination(self):
         if self.__early_termination_window == 0:
             self.__current_temperature *= self.__cooling_factor
         elif len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
-            print("Early-termination criterion has been met!")
+            tqdm.write("Early-termination criterion has been met!")
             self.__current_temperature = self.__final_temperature
         else:
             self.__current_temperature *= self.__cooling_factor
@@ -755,6 +724,7 @@ class Optimizer:
         self.__old_norm_objectives = checkpoint["norm"]
         self.__phy = [float(i) for i in checkpoint["phy"]]
         self.__archive = [{"x": [int(i) if j == Optimizer.Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]
+        self.__temperature = Optimizer.matter_temperatures(self.__current_temperature, self.__final_temperature, self.__cooling_factor)
 
     def __read_checkpoint_hill_climb(self, problem):
         print("Resuming hill-climbing from checkpoint...")
