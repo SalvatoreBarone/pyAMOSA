@@ -596,7 +596,9 @@ class Optimizer:
                 self.__print_statistics(problem)
             self.__save_checkpoint_minimize()
             problem.store_cache(self.cache_dir)
-            self.__check_early_termination()
+            if self.__check_early_termination():
+                tqdm.write("Early-termination criterion has been met!")
+                break
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
@@ -676,13 +678,9 @@ class Optimizer:
             tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __check_early_termination(self):
-        if self.__early_termination_window == 0:
-            self.__current_temperature *= self.__cooling_factor
-        elif len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
-            tqdm.write("Early-termination criterion has been met!")
-            self.__current_temperature = self.__final_temperature
-        else:
-            self.__current_temperature *= self.__cooling_factor
+        if self.__early_termination_window != 0 and len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
+            return True
+        return False
 
     def __save_checkpoint_minimize(self):
         checkpoint = {
