@@ -477,7 +477,8 @@ class Optimizer:
         Optimizer.print_header(problem)
         self.__print_statistics(problem)
         self.__main_loop(problem)
-        self.__archive = Optimizer.remove_dominated(Optimizer.remove_infeasible(problem, self.__archive))
+        self.__archive = Optimizer.remove_infeasible(problem, self.__archive)
+        self.__archive = Optimizer.remove_dominated(self.__archive)
         if len(self.__archive) > self.__archive_hard_limit:
             self.__archive = Optimizer.clustering(self.__archive, problem, self.__archive_hard_limit, self.__clustering_max_iterations, True)
         self.__print_statistics(problem)
