@@ -211,7 +211,7 @@ class Optimizer:
 
     @staticmethod
     def upper_point(problem):
-        x = {"x": problem.upper_bound, "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
+        x = {"x": [ (x - 1) if t == Optimizer.Type.INTEGER else (x - 2 * np.finfo(float).eps) for x, t in zip(problem.upper_bound, problem.types)], "f": [0] * problem.num_of_objectives, "g": [0] * problem.num_of_constraints if problem.num_of_constraints > 0 else None}
         Optimizer.get_objectives(problem, x)
         return x
 
