@@ -224,8 +224,7 @@ class Optimizer:
     @staticmethod
     def random_perturbation(problem, s, strength):
         z = copy.deepcopy(s)
-        # while z["x"] is in the cache, repeat the random perturbation
-        # a safety-exit prevents infinite loop, using a counter variable
+        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
         safety_exit = problem.max_attempt
         while safety_exit >= 0 and problem.is_cached(z):
             safety_exit -= 1
@@ -234,7 +233,11 @@ class Optimizer:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]
                 tp = problem.types[i]
-                z["x"][i] = lb if lb == ub else random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
+                narrow_interval = ((ub - lb) == 1) if tp == Optimizer.Type.INTEGER else ((ub - lb) <= np.finfo(float).eps)
+                if narrow_interval:
+                    z["x"][i] = lb
+                else:
+                    z["x"][i] = random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
         Optimizer.get_objectives(problem, z)
         return z
 

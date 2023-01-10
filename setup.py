@@ -12,7 +12,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="pyAMOSA",
-    version="1.1.2",
+    version="1.1.3",
     description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic",
     long_description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic. Take a look at https://github.com/SalvatoreBarone/pyAMOSA.",
     url="https://github.com/SalvatoreBarone/pyAMOSA",
