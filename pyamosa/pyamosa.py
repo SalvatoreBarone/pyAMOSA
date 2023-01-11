@@ -260,47 +260,49 @@ class Optimizer:
 
     @staticmethod
     def hill_climbing(problem, x, max_iterations):
-        d, up = Optimizer.hill_climbing_direction(problem)
+        dimention, increase = Optimizer.hill_climbing_direction(problem)
         for _ in range(max_iterations):
             y = copy.deepcopy(x)
-            Optimizer.hill_climbing_adaptive_step(problem, y, d, up)
+            Optimizer.hill_climbing_adaptive_step(problem, y, dimention, increase)
             if Optimizer.dominates(y, x) and Optimizer.not_the_same(y, x):
                 x = y
             else:
-                d, up = Optimizer.hill_climbing_direction(problem, d)
+                dimention, increase = Optimizer.hill_climbing_direction(problem, dimention)
         return x
 
     @staticmethod
-    def hill_climbing_direction(problem, c_d = None):
-        if c_d is None:
+    def hill_climbing_direction(problem, current_dimention = None):
+        if current_dimention is None:
             return random.randrange(0, problem.num_of_variables), 1 if random.random() > 0.5 else -1
-        up = 1 if random.random() > 0.5 else -1
-        d = random.randrange(0, problem.num_of_variables)
-        while c_d == d:
-            d = random.randrange(0, problem.num_of_variables)
-        return d, up
+        increase = (random.random() > 0.5)
+        dimention = random.randrange(0, problem.num_of_variables)
+        while current_dimention == dimention:
+            dimention = random.randrange(0, problem.num_of_variables)
+        return dimention, increase
 
     @staticmethod
-    def hill_climbing_adaptive_step(problem, s, d, up):
-        # while z["x"] is in the cache, repeat the random perturbation
-        # a safety-exit prevents infinite loop, using a counter variable
-        safety_exit = problem.max_attempt
-        while safety_exit >= 0 and problem.is_cached(s):
+    def get_step(increase, max_decrease, max_increase, dv_type):
+        random_function = random.randrange if dv_type == Optimizer.Type.INTEGER else random.uniform
+        min_step = 1 if dv_type == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
+        step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
+        while step <= min_step:
+            step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
+        return step
+        
+    @staticmethod
+    def hill_climbing_adaptive_step(problem, x, dimention, increase):
+        safety_exit = problem.max_attempt # a safety-exit prevents infinite loop, using a counter variable
+        while safety_exit >= 0 and problem.is_cached(x):
             safety_exit -= 1
-            lower_bound = problem.lower_bound[d] - s["x"][d]
-            upper_bound = problem.upper_bound[d] - s["x"][d]
-            if (up == -1 and lower_bound == 0) or (up == 1 and upper_bound == 0):
+            tp = problem.types[dimention]
+            safe_increase = 1 if tp == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
+            max_decrease = x["x"][dimention] - problem.lower_bound[dimention]
+            max_increase = problem.upper_bound[dimention] - x["x"][dimention] - safe_increase
+            narrow_interval = ((max_increase - max_decrease) <= 1) if tp == Optimizer.Type.INTEGER else ((max_increase - max_decrease) <= np.finfo(float).eps)
+            if narrow_interval:
                 return 0
-            if problem.types[d] == Optimizer.Type.INTEGER:
-                step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
-                while step == 0:
-                    step = random.randrange(lower_bound, 0) if up == -1 else random.randrange(0, upper_bound + 1)
-            else:
-                step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
-                while step == 0:
-                    step = random.uniform(lower_bound, 0) if up == -1 else random.uniform(0, upper_bound)
-            s["x"][d] += step
-        Optimizer.get_objectives(problem, s)
+            x["x"][dimention] += Optimizer.get_step(increase, max_decrease, max_increase, tp)
+        Optimizer.get_objectives(problem, x)
 
     @staticmethod
     def matter_temperatures(initial_temperature, final_temperature, cooling_factor):
@@ -544,7 +546,8 @@ class Optimizer:
 
     def __random_archive(self, problem):
         print("Initializing random archive...")
-        initial_candidate_solutions = [Optimizer.lower_point(problem), Optimizer.upper_point(problem)]
+        #initial_candidate_solutions = [Optimizer.lower_point(problem), Optimizer.upper_point(problem)]
+        initial_candidate_solutions = [Optimizer.lower_point(problem)]
         self.__initial_hill_climbing(problem, initial_candidate_solutions)
 
     def __archive_from_json(self, problem, json_file):
