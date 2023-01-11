@@ -281,13 +281,20 @@ class Optimizer:
         return dimention, increase
 
     @staticmethod
-    def get_step(increase, max_decrease, max_increase, dv_type):
+    def get_step(problem, increase, max_decrease, max_increase, dv_type):
         random_function = random.randrange if dv_type == Optimizer.Type.INTEGER else random.uniform
         min_step = 1 if dv_type == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
-        step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
-        while step <= min_step:
+        try:
+            safety_exit = problem.max_attempt # a safety-exit prevents infinite loop, using a counter variable
             step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
-        return step
+            while safety_exit >= 0 and step <= min_step:
+                safety_exit -= 1
+                step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
+            return step
+        except ValueError as err:
+            print(err)
+            print(f"Increase: {increase}; Max. Decrerase: {max_decrease}; Max. Increase: {max_increase}; Type: {dv_type}; Min. step size: {min_step}; Random function: {random_function}")
+            exit()
         
     @staticmethod
     def hill_climbing_adaptive_step(problem, x, dimention, increase):
@@ -295,13 +302,12 @@ class Optimizer:
         while safety_exit >= 0 and problem.is_cached(x):
             safety_exit -= 1
             tp = problem.types[dimention]
-            safe_increase = 1 if tp == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
-            max_decrease = x["x"][dimention] - problem.lower_bound[dimention]
-            max_increase = problem.upper_bound[dimention] - x["x"][dimention] - safe_increase
-            narrow_interval = ((max_increase - max_decrease) <= 1) if tp == Optimizer.Type.INTEGER else ((max_increase - max_decrease) <= np.finfo(float).eps)
-            if narrow_interval:
-                return 0
-            x["x"][dimention] += Optimizer.get_step(increase, max_decrease, max_increase, tp)
+            min_step = 1 if tp == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
+            max_decrease = problem.lower_bound[dimention] - x["x"][dimention]
+            max_increase = problem.upper_bound[dimention] - x["x"][dimention] - min_step
+            if (increase and max_increase < min_step) or (not increase and max_decrease < min_step):
+                return
+            x["x"][dimention] += Optimizer.get_step(problem, increase, max_decrease, max_increase, tp)
         Optimizer.get_objectives(problem, x)
 
     @staticmethod
