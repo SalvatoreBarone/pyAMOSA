@@ -119,6 +119,7 @@ class Optimizer:
             for t in types:
                 assert t in [Optimizer.Type.INTEGER, Optimizer.Type.REAL], "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
             self.types = types
+            self.min_step = [1 if t == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps) for t in self.types]
             for lb, ub, t in zip(lower_bounds, upper_bounds, self.types):
                 assert isinstance(lb, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
                 assert isinstance(ub, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
@@ -222,26 +223,6 @@ class Optimizer:
         return x
 
     @staticmethod
-    def random_perturbation(problem, s, strength):
-        z = copy.deepcopy(s)
-        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
-        safety_exit = problem.max_attempt
-        while safety_exit >= 0 and problem.is_cached(z):
-            safety_exit -= 1
-            indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
-            for i in indexes:
-                lb = problem.lower_bound[i]
-                ub = problem.upper_bound[i]
-                tp = problem.types[i]
-                narrow_interval = ((ub - lb) == 1) if tp == Optimizer.Type.INTEGER else ((ub - lb) <= np.finfo(float).eps)
-                if narrow_interval:
-                    z["x"][i] = lb
-                else:
-                    z["x"][i] = random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
-        Optimizer.get_objectives(problem, z)
-        return z
-
-    @staticmethod
     def accept(probability):
         return random.random() < probability
 
@@ -281,6 +262,16 @@ class Optimizer:
         return dimention, increase
 
     @staticmethod
+    def impose_domain_constraints(problem, x):
+        # impose constraints the hard way
+        lb = np.array(problem.lower_bound)
+        ub = np.array(problem.upper_bound)
+        dv = np.array(x["x"])
+        dv = np.where(dv < ub, dv, ub - problem.min_step)
+        dv = np.where(dv >= lb, dv, lb)
+        return dv.tolist()
+    
+    @staticmethod
     def get_step(problem, increase, max_decrease, max_increase, dv_type):
         random_function = random.randrange if dv_type == Optimizer.Type.INTEGER else random.uniform
         min_step = 1 if dv_type == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
@@ -305,10 +296,32 @@ class Optimizer:
             min_step = 1 if tp == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
             max_decrease = problem.lower_bound[dimention] - x["x"][dimention]
             max_increase = problem.upper_bound[dimention] - x["x"][dimention] - min_step
-            if (increase and max_increase < min_step) or (not increase and max_decrease < min_step):
+            if (increase and max_increase <= min_step) or (not increase and max_decrease <= min_step):
                 return
             x["x"][dimention] += Optimizer.get_step(problem, increase, max_decrease, max_increase, tp)
+            x["x"] = Optimizer.impose_domain_constraints(problem, x)
         Optimizer.get_objectives(problem, x)
+
+    @staticmethod
+    def random_perturbation(problem, s, strength):
+        z = copy.deepcopy(s)
+        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
+        safety_exit = problem.max_attempt
+        while safety_exit >= 0 and problem.is_cached(z):
+            safety_exit -= 1
+            indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            for i in indexes:
+                lb = problem.lower_bound[i]
+                ub = problem.upper_bound[i]
+                tp = problem.types[i]
+                narrow_interval = ((ub - lb) == 1) if tp == Optimizer.Type.INTEGER else ((ub - lb) <= np.finfo(float).eps)
+                if narrow_interval:
+                    z["x"][i] = lb
+                else:
+                    z["x"][i] = random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
+            z["x"] = Optimizer.impose_domain_constraints(problem, z)
+        Optimizer.get_objectives(problem, z)
+        return z
 
     @staticmethod
     def matter_temperatures(initial_temperature, final_temperature, cooling_factor):
