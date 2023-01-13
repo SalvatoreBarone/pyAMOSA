@@ -614,6 +614,7 @@ class Optimizer:
             if self.__check_early_termination():
                 tqdm.write("Early-termination criterion has been met!")
                 break
+        print("Matter is now solid. Try using a hammer...")
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
