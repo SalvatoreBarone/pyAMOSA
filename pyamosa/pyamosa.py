@@ -119,6 +119,7 @@ class Optimizer:
             for t in types:
                 assert t in [Optimizer.Type.INTEGER, Optimizer.Type.REAL], "Only AMOSA.Type.INTEGER or AMOSA.Type.REAL data-types for decison variables are supported!"
             self.types = types
+            self.min_step = [1 if t == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps) for t in self.types]
             for lb, ub, t in zip(lower_bounds, upper_bounds, self.types):
                 assert isinstance(lb, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {lb} in lower_bound is not suitable for {t}"
                 assert isinstance(ub, int if t == Optimizer.Type.INTEGER else float), f"Type mismatch. Value {ub} in upper_bound is not suitable for {t}"
@@ -222,26 +223,6 @@ class Optimizer:
         return x
 
     @staticmethod
-    def random_perturbation(problem, s, strength):
-        z = copy.deepcopy(s)
-        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
-        safety_exit = problem.max_attempt
-        while safety_exit >= 0 and problem.is_cached(z):
-            safety_exit -= 1
-            indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
-            for i in indexes:
-                lb = problem.lower_bound[i]
-                ub = problem.upper_bound[i]
-                tp = problem.types[i]
-                narrow_interval = ((ub - lb) == 1) if tp == Optimizer.Type.INTEGER else ((ub - lb) <= np.finfo(float).eps)
-                if narrow_interval:
-                    z["x"][i] = lb
-                else:
-                    z["x"][i] = random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
-        Optimizer.get_objectives(problem, z)
-        return z
-
-    @staticmethod
     def accept(probability):
         return random.random() < probability
 
@@ -281,20 +262,14 @@ class Optimizer:
         return dimention, increase
 
     @staticmethod
-    def get_step(problem, increase, max_decrease, max_increase, dv_type):
-        random_function = random.randrange if dv_type == Optimizer.Type.INTEGER else random.uniform
-        min_step = 1 if dv_type == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
-        try:
-            safety_exit = problem.max_attempt # a safety-exit prevents infinite loop, using a counter variable
-            step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
-            while safety_exit >= 0 and step <= min_step:
-                safety_exit -= 1
-                step = random_function(0, max_increase) if increase else random_function(max_decrease, 0)
-            return step
-        except ValueError as err:
-            print(err)
-            print(f"Increase: {increase}; Max. Decrerase: {max_decrease}; Max. Increase: {max_increase}; Type: {dv_type}; Min. step size: {min_step}; Random function: {random_function}")
-            exit()
+    def impose_domain_constraints(problem, x):
+        # impose constraints the hard way
+        lb = np.array(problem.lower_bound)
+        ub = np.array(problem.upper_bound)
+        dv = np.array(x["x"])
+        dv = np.where(dv < ub, dv, ub - problem.min_step)
+        dv = np.where(dv >= lb, dv, lb)
+        return dv.tolist()
         
     @staticmethod
     def hill_climbing_adaptive_step(problem, x, dimention, increase):
@@ -303,12 +278,38 @@ class Optimizer:
             safety_exit -= 1
             tp = problem.types[dimention]
             min_step = 1 if tp == Optimizer.Type.INTEGER else (2 * np.finfo(float).eps)
+            random_function = random.randrange if tp == Optimizer.Type.INTEGER else random.uniform
             max_decrease = problem.lower_bound[dimention] - x["x"][dimention]
             max_increase = problem.upper_bound[dimention] - x["x"][dimention] - min_step
-            if (increase and max_increase < min_step) or (not increase and max_decrease < min_step):
-                return
-            x["x"][dimention] += Optimizer.get_step(problem, increase, max_decrease, max_increase, tp)
+            step = 0
+            if increase and max_increase > 0:
+                step = random_function(0, max_increase) 
+            elif increase == False and max_decrease < 0:
+                step = random_function(max_decrease, 0)
+            x["x"][dimention] += step
+            x["x"] = Optimizer.impose_domain_constraints(problem, x)
         Optimizer.get_objectives(problem, x)
+
+    @staticmethod
+    def random_perturbation(problem, s, strength):
+        z = copy.deepcopy(s)
+        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
+        safety_exit = problem.max_attempt
+        while safety_exit >= 0 and problem.is_cached(z):
+            safety_exit -= 1
+            indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            for i in indexes:
+                lb = problem.lower_bound[i]
+                ub = problem.upper_bound[i]
+                tp = problem.types[i]
+                narrow_interval = ((ub - lb) == 1) if tp == Optimizer.Type.INTEGER else ((ub - lb) <= np.finfo(float).eps)
+                if narrow_interval:
+                    z["x"][i] = lb
+                else:
+                    z["x"][i] = random.randrange(lb, ub) if tp == Optimizer.Type.INTEGER else random.uniform(lb, ub)
+            z["x"] = Optimizer.impose_domain_constraints(problem, z)
+        Optimizer.get_objectives(problem, z)
+        return z
 
     @staticmethod
     def matter_temperatures(initial_temperature, final_temperature, cooling_factor):
@@ -574,6 +575,7 @@ class Optimizer:
         if self.__hill_climbing_iterations > 0:
             if self.__multiprocessing_enables:
                 args = [[problem, self.__hill_climbing_iterations]] * cpu_count()
+                print(f"Performing Initial Hill Climbing Step using {cpu_count()} threads")
                 for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing", leave = False):
                     with Pool(cpu_count()) as pool:
                         new_points = pool.starmap(Optimizer.hillclimb_thread_loop, args)
@@ -612,6 +614,7 @@ class Optimizer:
             if self.__check_early_termination():
                 tqdm.write("Early-termination criterion has been met!")
                 break
+        print("Matter is now solid. Try using a hammer...")
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
@@ -691,9 +694,14 @@ class Optimizer:
             tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.__current_temperature, self.__n_eval, len(self.__archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
 
     def __check_early_termination(self):
-        if self.__early_termination_window != 0 and len(self.__phy) > self.__early_termination_window and all(self.__phy[-self.__early_termination_window:] <= np.finfo(float).eps):
-            return True
-        return False
+        return (
+            self.__early_termination_window != 0
+            and len(self.__phy) > self.__early_termination_window
+            and all(
+                self.__phy[-self.__early_termination_window :]
+                <= np.finfo(float).eps
+            )
+        )
 
     def __save_checkpoint_minimize(self):
         checkpoint = {
