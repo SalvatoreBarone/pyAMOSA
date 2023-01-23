@@ -62,17 +62,18 @@ def evaluate(prob):
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
 @click.option('--climb', type = int, required = False, default = 2500, help = 'Hill climbing iterations')
 @click.option('--itemp', type = float, required = False, default = 500, help = 'Initial temperature')
-@click.option('--ftemp', type = float, required = False, default = 1e-7, help = 'Final temperature')
+@click.option('--ftemp', type = float, required = False, default = None, help = 'Final temperature')
 @click.option('--cool', type = float, required = False, default = 0.9, help = 'Cooling factor')
 @click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
-@click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
+@click.option('--win', type = int, required = False, default = None, help = 'PHY-based early-termination window size')
 @click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts):
+@click.option('--maxtime', type = int, required = False, default = None, help = 'Max duration (hh:mm:ss)')
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts, maxtime):
     """ Run a test problem """
     problem = problems[prob]
-    config = pyamosa.Optimizer.Config
+    config = pyamosa.Config
     config.archive_hard_limit = hard
     config.archive_soft_limit = soft
     config.archive_gamma = gamma
@@ -92,7 +93,16 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     optimizer.cache_dir = f".{prob}_cache"
     if attempts != 0:
         problem.max_attempt = attempts
-    optimizer.run(problem, improve = json_file)
+    if ftemp is not None:
+        termination = pyamosa.MinTemperature(ftemp)
+    elif win is not None:
+        termination = pyamosa.MaxPhyWindow(win)
+    elif maxtime is not None:
+        termination = pyamosa.MaxTime(maxtime)
+    else:
+        print("You should set a termination criterion!")
+        exit()
+    optimizer.run(problem, termination_criterion = termination, improve = json_file)
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
     optimizer.archive_to_json(f"{prob}_final_archive.json")

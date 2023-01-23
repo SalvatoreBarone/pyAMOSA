@@ -17,11 +17,11 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import os, sys, pyamosa, numpy as np
 
 
-class ZDT2(pyamosa.Optimizer.Problem):
+class ZDT2(pyamosa.Problem):
     n_var = 30
 
     def __init__(self):
-        pyamosa.Optimizer.Problem.__init__(self, ZDT2.n_var, [pyamosa.Optimizer.Type.REAL] * ZDT2.n_var, [0.0] * ZDT2.n_var, [1.0] * ZDT2.n_var, 2, 0)
+        pyamosa.Problem.__init__(self, ZDT2.n_var, [pyamosa.Optimizer.Type.REAL] * ZDT2.n_var, [0.0] * ZDT2.n_var, [1.0] * ZDT2.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]

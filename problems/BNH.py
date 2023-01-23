@@ -17,11 +17,11 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import os, sys, pyamosa, numpy as np
 
 
-class BNH(pyamosa.Optimizer.Problem):
+class BNH(pyamosa.Problem):
     n_var = 2
 
     def __init__(self):
-        pyamosa.Optimizer.Problem.__init__(self, BNH.n_var, [pyamosa.Optimizer.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
+        pyamosa.Problem.__init__(self, BNH.n_var, [pyamosa.Optimizer.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
 
     def evaluate(self, x, out):
         f1 = 4 * x[0] ** 2 + 4 * x[1] ** 2

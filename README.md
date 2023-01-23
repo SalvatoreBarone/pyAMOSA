@@ -75,21 +75,19 @@ if __name__ == "__main__":
 ```
 
 The ```pyamosa.Optimizer``` class allows setting a vast plethora of configuration parameters governing the behavior of the 
-heuristic. You must do it by creating an ```pyamosa.Optimizer.Config``` object, as follows
+heuristic. You must do it by creating an ```pyamosa.Config``` object, as follows
 
 ```python
-    config = pyamosa.Optimizer.Config()
+    config = pyamosa.Config()
     config.archive_hard_limit = 100
     config.archive_soft_limit = 200
     config.archive_gamma = 2
     config.clustering_max_iterations = 300
     config.hill_climbing_iterations = 500
     config.initial_temperature = 500
-    config.final_temperature = 1e-7
     config.cooling_factor = 0.9
     config.annealing_iterations = 1000
     config.annealing_strength = 1
-    config.early_terminator_window = 30
     config.multiprocess_enabled = True
 ```
 
