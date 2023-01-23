@@ -19,7 +19,7 @@ import os, sys, pyamosa, numpy as np
 
 class OSY(pyamosa.Problem):
     def __init__(self):
-        pyamosa.Problem.__init__(self, 6, [pyamosa.Optimizer.Type.REAL] * 6, [0.0, 0.0, 1.0, 0.0, 1.0, 0.0], [10.0, 10.0, 5.0, 6.0, 5.0, 10.0], 2, 6)
+        pyamosa.Problem.__init__(self, 6, [pyamosa.Type.REAL] * 6, [0.0, 0.0, 1.0, 0.0, 1.0, 0.0], [10.0, 10.0, 5.0, 6.0, 5.0, 10.0], 2, 6)
 
     def evaluate(self, x, out):
         f1 = -(25 * (x[0] - 2) ** 2 + (x[1] - 2) ** 2 + (x[2] - 1) ** 2 + (x[3] - 4) ** 2 + (x[4] - 1) ** 2 )

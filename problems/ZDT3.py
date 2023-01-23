@@ -22,7 +22,7 @@ class ZDT3(pyamosa.Problem):
 
     def __init__(self):
 
-        pyamosa.Problem.__init__(self, ZDT3.n_var, [pyamosa.Optimizer.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
+        pyamosa.Problem.__init__(self, ZDT3.n_var, [pyamosa.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]

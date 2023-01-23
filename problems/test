@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 """
 Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, json, pyamosa, numpy as np, matplotlib.pyplot as plt, click
+import os, sys, json, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
 from BNH import *
 from OSY import *
 from TNK import *
@@ -69,7 +69,7 @@ def evaluate(prob):
 @click.option('--win', type = int, required = False, default = None, help = 'PHY-based early-termination window size')
 @click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
-@click.option('--maxtime', type = int, required = False, default = None, help = 'Max duration (hh:mm:ss)')
+@click.option('--maxtime', type = str, required = False, default = None, help = 'Max duration (hh:mm:ss)')
 def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts, maxtime):
     """ Run a test problem """
     problem = problems[prob]
@@ -94,15 +94,16 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     if attempts != 0:
         problem.max_attempt = attempts
     if ftemp is not None:
-        termination = pyamosa.MinTemperature(ftemp)
+        termination = pyamosa.StopMinTemperature(ftemp)
     elif win is not None:
-        termination = pyamosa.MaxPhyWindow(win)
+        termination = pyamosa.StopPhyWindow(win)
     elif maxtime is not None:
-        termination = pyamosa.MaxTime(maxtime)
+        termination = pyamosa.StopMaxTime(maxtime)
     else:
         print("You should set a termination criterion!")
         exit()
     optimizer.run(problem, termination_criterion = termination, improve = json_file)
+    print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
     optimizer.archive_to_json(f"{prob}_final_archive.json")

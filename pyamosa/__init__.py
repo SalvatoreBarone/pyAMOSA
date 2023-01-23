@@ -17,7 +17,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 from .DataType import Type
 from .Problem import Problem
 from .Config import Config
-from .Optimizer import Optimizer
+from .Optimizer import Optimizer, StopCriterion, StopMaxTime, StopMinTemperature, StopPhyWindow
 
 name = "pyamosa"
 __version__ = "1.2.0"

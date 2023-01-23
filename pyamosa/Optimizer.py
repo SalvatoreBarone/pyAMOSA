@@ -619,7 +619,7 @@ class Optimizer:
         return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
 
 
-class MinTemperature(StopCriterion):
+class StopMinTemperature(StopCriterion):
     def __init__(self, min_temperature : float):
         assert min_temperature > 0
         self.min_temperature = min_temperature
@@ -628,14 +628,14 @@ class MinTemperature(StopCriterion):
     def check_termination(self, optimizer : Optimizer):
         return (optimizer.current_temperature < self.min_temperature) 
 
-class MaxTime(StopCriterion):
+class StopMaxTime(StopCriterion):
     def __init__(self, max_duration : str):
         self.max_seconds = sum([int(i) * j for i,j in zip(max_duration.split(':'), [3600, 60, 1])])     
 
     def check_termination(self, optimizer : Optimizer):
         return (time.time() - optimizer.duration > self.max_seconds)
 
-class MaxPhyWindow(StopCriterion):
+class StopPhyWindow(StopCriterion):
     def __init__(self, termination_window : int):
         assert termination_window > 0
         self.window_width = termination_window
