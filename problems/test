@@ -80,17 +80,15 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     config.clustering_max_iterations = 300
     config.hill_climbing_iterations = climb
     config.initial_temperature = itemp
-    config.final_temperature = ftemp
     config.cooling_factor = cool
     config.annealing_iterations = iter
     config.annealing_strength = strg
-    config.early_terminator_window = win
     config.multiprocessing_enabled = False
+    config.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
+    config.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
+    config.cache_dir = f".{prob}_cache"
     print(f"Using pyamosa {pyamosa.__version__}")
     optimizer = pyamosa.Optimizer(config)
-    optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
-    optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
-    optimizer.cache_dir = f".{prob}_cache"
     if attempts != 0:
         problem.max_attempt = attempts
     if ftemp is not None:

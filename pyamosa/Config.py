@@ -27,7 +27,12 @@ class Config:
             cooling_factor : float = 0.9,
             annealing_iterations : int = 500,
             annealing_strength : int = 1,
-            multiprocessing_enabled : bool = True):
+            multiprocessing_enabled : bool = True,
+            hill_climb_checkpoint_file : str = "hill_climb_checkpoint.json",
+            minimize_checkpoint_file : str = "minimize_checkpoint.json",
+            cache_dir :str = ".cache"
+            ):
+
         assert archive_soft_limit >= archive_hard_limit > 0, f"soft limit: {archive_soft_limit}, hard limit: {archive_hard_limit}"
         assert archive_gamma > 0, f"gamma: {archive_gamma}"
         assert clustering_max_iterations > 0, f"clustering iterations: {clustering_max_iterations}"
@@ -45,3 +50,6 @@ class Config:
         self.annealing_iterations = annealing_iterations
         self.annealing_strength = annealing_strength
         self.multiprocessing_enabled = multiprocessing_enabled
+        self.hill_climb_checkpoint_file = hill_climb_checkpoint_file
+        self.minimize_checkpoint_file = minimize_checkpoint_file
+        self.cache_dir = cache_dir

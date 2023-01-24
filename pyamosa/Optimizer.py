@@ -20,13 +20,7 @@ from tqdm import tqdm, trange
 from .DataType import Type
 from .Config import Config
 from .Problem import Problem
-
-class StopCriterion:
-    def __init__(self):
-        pass
-
-    def check_termination(self, optimizer):
-        pass
+from .StopCriterion import StopCriterion
 class Optimizer:
     hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
     minimize_checkpoint_file = "minimize_checkpoint.json"
@@ -34,19 +28,8 @@ class Optimizer:
 
     def __init__(self, config : Config):
         warnings.filterwarnings("error")
-        self.archive_hard_limit = config.archive_hard_limit
-        self.archive_soft_limit = config.archive_soft_limit
-        self.archive_gamma = config.archive_gamma
-        self.clustering_max_iterations = config.clustering_max_iterations
-        self.hill_climbing_iterations = config.hill_climbing_iterations
-        self.initial_temperature = config.initial_temperature
-        self.cooling_factor = config.cooling_factor
-        self.annealing_iterations = config.annealing_iterations
-        self.annealing_strength = config.annealing_strength
-        self.multiprocessing_enables = config.multiprocessing_enabled
-        self.hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
-        self.minimize_checkpoint_file = "minimize_checkpoint.json"
-        self.cache_dir = ".cache"
+        self.config = config
+
         self.current_temperature = 0
         self.archive = []
         self.duration = 0
@@ -57,9 +40,11 @@ class Optimizer:
         self.phy = []
 
     def run(self, problem : Problem, termination_criterion : StopCriterion, improve : str = None, remove_checkpoints : bool = True):
-        problem.load_cache(self.cache_dir)
-        self.current_temperature = self.initial_temperature
-        # self.temperature = Optimizer.matter_temperatures(self.initial_temperature, self.final_temperature, self.cooling_factor)
+        problem.load_cache(self.config.cache_dir)
+        self.current_temperature = self.config.initial_temperature
+        # self.temperature = Optimizer.matter_temperatures(self.config.initial_temperature, self.final_temperature, self.config.cooling_factor)
+
+        assert self.config.annealing_strength <= problem.num_of_variables, f"Too much strength ({self.config.annealing_strength}) for this problem! It has only {problem.num_of_variables} variables!"
         self.archive = []
         self.duration = 0
         self.n_eval = 0
@@ -67,45 +52,46 @@ class Optimizer:
         self.nadir = None
         self.old_norm_objectives = []
         self.phy = []
+
         self.duration = time.time()
-        if os.path.exists(self.minimize_checkpoint_file):
+        if os.path.exists(self.config.minimize_checkpoint_file):
             self.read_checkpoint_minimize(problem)
             problem.archive_to_cache(self.archive)
-        elif os.path.exists(self.hill_climb_checkpoint_file):
+        elif os.path.exists(self.config.hill_climb_checkpoint_file):
             initial_candidate = self.read_checkpoint_hill_climb(problem)
             problem.archive_to_cache(initial_candidate)
             self.initial_hill_climbing(problem, initial_candidate)
-            if len(self.archive) > self.archive_hard_limit:
-                self.archive = Optimizer.clustering(self.archive, problem, self.archive_hard_limit, self.clustering_max_iterations, True)
+            if len(self.archive) > self.config.archive_hard_limit:
+                self.archive = Optimizer.clustering(self.archive, problem, self.config.archive_hard_limit, self.config.clustering_max_iterations, True)
             self.save_checkpoint_minimize()
             if remove_checkpoints:
-                os.remove(self.hill_climb_checkpoint_file)
+                os.remove(self.config.hill_climb_checkpoint_file)
         elif improve is not None:
             self.archive_from_json(problem, improve)
             problem.archive_to_cache(self.archive)
-            if len(self.archive) > self.archive_hard_limit:
-                self.archive = Optimizer.clustering(self.archive, problem, self.archive_hard_limit, self.clustering_max_iterations, True)
+            if len(self.archive) > self.config.archive_hard_limit:
+                self.archive = Optimizer.clustering(self.archive, problem, self.config.archive_hard_limit, self.config.clustering_max_iterations, True)
             self.save_checkpoint_minimize()
             if remove_checkpoints:
-                os.remove(self.hill_climb_checkpoint_file)
+                os.remove(self.config.hill_climb_checkpoint_file)
         else:
             self.random_archive(problem)
             self.save_checkpoint_minimize()
             if remove_checkpoints:
-                os.remove(self.hill_climb_checkpoint_file)
+                os.remove(self.config.hill_climb_checkpoint_file)
         assert len(self.archive) > 0, "Archive not initialized"
         Optimizer.print_header(problem)
         self.print_statistics(problem)
         self.main_loop(problem, termination_criterion)
         self.archive = Optimizer.remove_infeasible(problem, self.archive)
         self.archive = Optimizer.remove_dominated(self.archive)
-        if len(self.archive) > self.archive_hard_limit:
-            self.archive = Optimizer.clustering(self.archive, problem, self.archive_hard_limit, self.clustering_max_iterations, True)
+        if len(self.archive) > self.config.archive_hard_limit:
+            self.archive = Optimizer.clustering(self.archive, problem, self.config.archive_hard_limit, self.config.clustering_max_iterations, True)
         self.print_statistics(problem)
         self.duration = time.time() - self.duration
-        problem.store_cache(self.cache_dir)
+        problem.store_cache(self.config.cache_dir)
         if remove_checkpoints:
-            os.remove(self.minimize_checkpoint_file)
+            os.remove(self.config.minimize_checkpoint_file)
 
     def pareto_front(self):
         return np.array([s["f"] for s in self.archive])
@@ -179,10 +165,10 @@ class Optimizer:
         self.archive = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 
     def initial_hill_climbing(self, problem, initial_candidate_solutions):
-        num_of_initial_candidate_solutions = self.archive_gamma * self.archive_soft_limit
-        if self.hill_climbing_iterations > 0:
-            if self.multiprocessing_enables:
-                args = [[problem, self.hill_climbing_iterations]] * cpu_count()
+        num_of_initial_candidate_solutions = self.config.archive_gamma * self.config.archive_soft_limit
+        if self.config.hill_climbing_iterations > 0:
+            if self.config.multiprocessing_enabled:
+                args = [[problem, self.config.hill_climbing_iterations]] * cpu_count()
                 print(f"Performing Initial Hill Climbing Step using {cpu_count()} threads")
                 for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing", leave = False):
                     with Pool(cpu_count()) as pool:
@@ -191,7 +177,7 @@ class Optimizer:
                     self.save_checkpoint_hillclimb(initial_candidate_solutions)
             else:
                 for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, desc = "Hill climbing", leave = False):
-                    initial_candidate_solutions.append(Optimizer.hillclimb_thread_loop(problem, self.hill_climbing_iterations))
+                    initial_candidate_solutions.append(Optimizer.hillclimb_thread_loop(problem, self.config.hill_climbing_iterations))
                     self.save_checkpoint_hillclimb(initial_candidate_solutions)
         for x in initial_candidate_solutions:
             Optimizer.add_to_archive(self.archive, x)
@@ -203,22 +189,22 @@ class Optimizer:
     def main_loop(self, problem : Problem, termination_criterion : StopCriterion):
         current_point = random.choice(self.archive)
         while not termination_criterion.check_termination(self):
-            self.current_temperature *= self.cooling_factor
-            if self.multiprocessing_enables:
-                args = [[problem, self.archive.copy(), random.choice(self.archive), self.current_temperature, self.annealing_iterations, self.annealing_strength, self.archive_soft_limit, self.archive_hard_limit, self.clustering_max_iterations, True, i] for i in [t == 0 for t in range(cpu_count())]]
+            self.current_temperature *= self.config.cooling_factor
+            if self.config.multiprocessing_enabled:
+                args = [[problem, self.archive.copy(), random.choice(self.archive), self.current_temperature, self.config.annealing_iterations, self.config.annealing_strength, self.config.archive_soft_limit, self.config.archive_hard_limit, self.config.clustering_max_iterations, True, i] for i in [t == 0 for t in range(cpu_count())]]
                 with Pool(cpu_count()) as pool:
                     archives = pool.starmap(Optimizer.annealing_thread_loop, args)
                 self.archive = Optimizer.nondominated_merge(archives)
-                self.n_eval += self.annealing_iterations * cpu_count()
+                self.n_eval += self.config.annealing_iterations * cpu_count()
             else:
-                self.archive = Optimizer.annealing_thread_loop(problem, self.archive, current_point, self.current_temperature, self.annealing_iterations, self.annealing_strength, self.archive_soft_limit, self.archive_hard_limit, self.clustering_max_iterations, False, True)
-                self.n_eval += self.annealing_iterations
+                self.archive = Optimizer.annealing_thread_loop(problem, self.archive, current_point, self.current_temperature, self.config.annealing_iterations, self.config.annealing_strength, self.config.archive_soft_limit, self.config.archive_hard_limit, self.config.clustering_max_iterations, False, True)
+                self.n_eval += self.config.annealing_iterations
             self.print_statistics(problem)
-            if len(self.archive) > self.archive_soft_limit:
-                self.archive = Optimizer.clustering(self.archive, problem, self.archive_hard_limit, self.clustering_max_iterations, True)
+            if len(self.archive) > self.config.archive_soft_limit:
+                self.archive = Optimizer.clustering(self.archive, problem, self.config.archive_hard_limit, self.config.clustering_max_iterations, True)
                 self.print_statistics(problem)
             self.save_checkpoint_minimize()
-            problem.store_cache(self.cache_dir)
+            problem.store_cache(self.config.cache_dir)
         print("Matter is now solid. Try using a hammer...")
 
     @staticmethod
@@ -320,7 +306,7 @@ class Optimizer:
         }
         try:
             json_string = json.dumps(checkpoint)
-            with open(self.minimize_checkpoint_file, 'w') as outfile:
+            with open(self.config.minimize_checkpoint_file, 'w') as outfile:
                 outfile.write(json_string)
         except TypeError as e:
             print(checkpoint)
@@ -330,7 +316,7 @@ class Optimizer:
     def save_checkpoint_hillclimb(self, candidate_solutions):
         try:
             json_string = json.dumps(candidate_solutions)
-            with open(self.hill_climb_checkpoint_file, 'w') as outfile:
+            with open(self.config.hill_climb_checkpoint_file, 'w') as outfile:
                 outfile.write(json_string)
         except TypeError as e:
             print(candidate_solutions)
@@ -339,7 +325,7 @@ class Optimizer:
 
     def read_checkpoint_minimize(self, problem):
         print("Resuming minimize from checkpoint...")
-        with open(self.minimize_checkpoint_file) as file:
+        with open(self.config.minimize_checkpoint_file) as file:
             checkpoint = json.load(file)
         self.n_eval = int(checkpoint["n_eval"])
         self.current_temperature = float(checkpoint["t"])
@@ -351,7 +337,7 @@ class Optimizer:
 
     def read_checkpoint_hill_climb(self, problem):
         print("Resuming hill-climbing from checkpoint...")
-        with open(self.hill_climb_checkpoint_file) as file:
+        with open(self.config.hill_climb_checkpoint_file) as file:
             checkpoint = json.load(file)
         return [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
 
@@ -617,28 +603,3 @@ class Optimizer:
     @staticmethod
     def inverted_generational_distance(p_t, p_tau):
         return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
-
-
-class StopMinTemperature(StopCriterion):
-    def __init__(self, min_temperature : float):
-        assert min_temperature > 0
-        self.min_temperature = min_temperature
-        pass
-
-    def check_termination(self, optimizer : Optimizer):
-        return (optimizer.current_temperature < self.min_temperature) 
-
-class StopMaxTime(StopCriterion):
-    def __init__(self, max_duration : str):
-        self.max_seconds = sum([int(i) * j for i,j in zip(max_duration.split(':'), [3600, 60, 1])])     
-
-    def check_termination(self, optimizer : Optimizer):
-        return (time.time() - optimizer.duration > self.max_seconds)
-
-class StopPhyWindow(StopCriterion):
-    def __init__(self, termination_window : int):
-        assert termination_window > 0
-        self.window_width = termination_window
-
-    def check_termination(self, optimizer : Optimizer):
-        return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width :] <= np.finfo(float).eps))

@@ -14,16 +14,13 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-from .DataType import Type
-from .Problem import Problem
-from .Config import Config
-from .Optimizer import Optimizer 
+import time
 from .StopCriterion import StopCriterion
-from .StopMaxTime import StopMaxTime
-from .StopMinTemperature import StopMinTemperature
-from .StopPhyWindow import StopPhyWindow
 
-name = "pyamosa"
-__version__ = "1.2.0"
-__author__ = "Salvatore Barone"
-__credits__ = "Department of Electrical Engineering and Information Technologies, University of Naples Federico II, Via Claudio 21, Naples, Italy"
+
+class StopMaxTime(StopCriterion):
+    def __init__(self, max_duration : str):
+        self.max_seconds = sum([int(i) * j for i,j in zip(max_duration.split(':'), [3600, 60, 1])])     
+
+    def check_termination(self, optimizer):
+        return (time.time() - optimizer.duration > self.max_seconds)
