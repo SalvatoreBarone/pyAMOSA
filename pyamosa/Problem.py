@@ -40,7 +40,7 @@ class Problem:
         self.cache_hits = 0
         self.max_attempt = self.num_of_variables
 
-    def evaluate(self, x, out):
+    def evaluate(self, x : list, out : dict):
         pass
 
     def optimums(self):
