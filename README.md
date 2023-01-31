@@ -52,12 +52,14 @@ with
 
 
 ```python
-import pyamosa
+import pyamosa, numpy as np
 
-class ZDT1(pyamosa.Optimizer.Problem):
+class ZDT1(pyamosa.Problem):
+    n_var = 30
+
     def __init__(self):
-        n_var = 30
-        pyamosa.Optimizer..Problem.__init__(self, 30, [pyamosa.Optimizer..Type.REAL] * 30, [0] * 30, [1] * 30, 2, 0)
+
+        pyamosa.Problem.__init__(self, ZDT1.n_var, [pyamosa.Type.REAL] * ZDT1.n_var, [0.0]*ZDT1.n_var, [1.0] * ZDT1.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
@@ -75,21 +77,19 @@ if __name__ == "__main__":
 ```
 
 The ```pyamosa.Optimizer``` class allows setting a vast plethora of configuration parameters governing the behavior of the 
-heuristic. You must do it by creating an ```pyamosa.Optimizer.Config``` object, as follows
+heuristic. You must do it by creating an ```pyamosa.Config``` object, as follows
 
 ```python
-    config = pyamosa.Optimizer.Config()
+    config = pyamosa.Config()
     config.archive_hard_limit = 100
     config.archive_soft_limit = 200
     config.archive_gamma = 2
     config.clustering_max_iterations = 300
     config.hill_climbing_iterations = 500
     config.initial_temperature = 500
-    config.final_temperature = 1e-7
     config.cooling_factor = 0.9
     config.annealing_iterations = 1000
     config.annealing_strength = 1
-    config.early_terminator_window = 30
     config.multiprocess_enabled = True
 ```
 
@@ -100,16 +100,30 @@ heuristic. You must do it by creating an ```pyamosa.Optimizer.Config``` object, 
  - the ```clustering_max_iterations``` allows foverning the maximum iterations performed during k-means clustering;
  - the ```annealing_iterations``` allows governing the amount of refinement iterations performed during the main-loop of the heuristic;
  - the ```initial_temperature``` is the initial temperature of the matter;
- - the ```final_temperature``` is the final temperature of the matter;
  - the ```cooling_factor``` governs how quickly the temperature of the matter decreases during the annealing process.
  - the ```annealing_strength``` governs the strength of random perturbations during the annealing phase; specifically, the number of variables whose value is affected by perturbation.
- - the ```early_termination_window``` parameter allows the early-termination of the algorithm in case the Pareto-front does not improve through the specified amount of iterations. See [3] for more.
  - the ```multiprocess_enabled``` parameter allows enabling/disabling process-based parallelism.
  
 Now you can proceed solving the problem.
 ```
-    optimizer.run(problem)
+    optimizer.run(problem, termination_criterion)
 ```
+
+Kindle note the ```termination_criterion``` paramerer. You can chose one of the following three:
+  1. ```pyamosa.StopMinTemperature```: this is the classic termination criterion for simulated annealing: when the temperature of the matter is lower than the threshold, the algorithm is terminated. For instance, to run until the temperature goes below ```1e-7```, the termination criterion can be defined as follows:
+  ```python
+  pyamosa.StopMinTemperature(1e-7)
+  ```
+  2. ```pyamosa.StopMaxTime```: the termination can also be based on the time of the algorithm to be executed. For instance, to run an algorithm for 3 hours, 30 minutes, the termination can be defined as it follows (***note the initial hill-climbing is taken into account!***):
+```python
+termination = pyamosa.StopMaxTime("3:30")
+```
+  3. ```pyamosa.StopPhyWindow```: the most interesting stopping criterion is to use objective space change to decide whether to terminate the algorithm. Here, we resort to a simple and efficient procedure to determine whether to stop or not, described in [3]: it is based on the inter-generational distance (IGD), and it allows to stop the algorithm in case it cannot improve the Pareto front in a sequence of iterations. Say you want to stop if the algorithm is unable to improve in 10 iterations (meaning complete algorithm iterations, each of which consists of the number of annealing iterations as defined by the corresponding configuration parameter); then, the termination criterion can be defined as it follows
+  ```python
+  termination = pyamosa.StopPhyWindow(10)
+  ```
+  
+
 At the end of execution, you can access the Pareto-front and the Pareto-set through the ```pareto_front()``` and 
 ```pareto_set()``` methods of the ```pyamosa.Optimizer``` class. You can also save the archive on CSV or JSON files, using the 
 ```archive_to_csv()``` or the ```archive_to_json()``` methods. The class also provides the ```plot_pareto()```, that plots
@@ -136,6 +150,45 @@ class Problem(pyamosa.Optimizer.Problem):
     def evaluate(self, x, out):
         ...
         out["g"] = [ ..., x**4 - 2, ... ]
+```
+For instance, consider the BNH test problem
+
+*min*: 
+
+<image src="https://latex.codecogs.com/svg.image?f_1(\textbf{x})=4x_1^2+4x_2^2"/>
+
+<image src="https://latex.codecogs.com/svg.image?f_2(\textbf{x})=(x_1-5)^2+(x_2-5)^2"/>
+
+*s.t.*
+
+<image src="https://latex.codecogs.com/svg.image?(x_1-5)^2+x_2^2\le25"/>
+
+
+<image src="https://latex.codecogs.com/svg.image?(x_1-8)^2+(x_2+3)^2\ge7.7"/>
+
+<image src="https://latex.codecogs.com/svg.image?0 \le x_1 \le 5"/>
+
+<image src="https://latex.codecogs.com/svg.image?0 \le x_2 \le 3"/>
+
+
+It can be defined as it follows:
+```python
+import pyamosa, numpy as np
+
+
+class BNH(pyamosa.Problem):
+    n_var = 2
+
+    def __init__(self):
+        pyamosa.Problem.__init__(self, BNH.n_var, [pyamosa.Type.REAL] * BNH.n_var, [0.0] * BNH.n_var, [5.0, 3.0], 2, 2)
+
+    def evaluate(self, x, out):
+        f1 = 4 * x[0] ** 2 + 4 * x[1] ** 2
+        f2 = (x[0] - 5) ** 2 + (x[1] - 5) ** 2
+        g1 = (x[0] - 5) ** 2 + x[1] ** 2 - 25
+        g2 = 7.7 - (x[0] - 5) ** 2 - (x[1] + 3) ** 2
+        out["f"] = [f1, f2 ]
+        out["g"] = [g1, g2]
 ```
 
 ## Improving a previous run

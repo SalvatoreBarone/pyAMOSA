@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!python3
 """
 Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
 
@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, json, pyamosa, numpy as np, matplotlib.pyplot as plt, click
+import os, sys, json, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
 from BNH import *
 from OSY import *
 from TNK import *
@@ -62,37 +62,46 @@ def evaluate(prob):
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
 @click.option('--climb', type = int, required = False, default = 2500, help = 'Hill climbing iterations')
 @click.option('--itemp', type = float, required = False, default = 500, help = 'Initial temperature')
-@click.option('--ftemp', type = float, required = False, default = 1e-7, help = 'Final temperature')
+@click.option('--ftemp', type = float, required = False, default = None, help = 'Final temperature')
 @click.option('--cool', type = float, required = False, default = 0.9, help = 'Cooling factor')
 @click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
-@click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
+@click.option('--win', type = int, required = False, default = None, help = 'PHY-based early-termination window size')
 @click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts):
+@click.option('--maxtime', type = str, required = False, default = None, help = 'Max duration (hh:mm:ss)')
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts, maxtime):
     """ Run a test problem """
     problem = problems[prob]
-    config = pyamosa.Optimizer.Config
+    config = pyamosa.Config
     config.archive_hard_limit = hard
     config.archive_soft_limit = soft
     config.archive_gamma = gamma
     config.clustering_max_iterations = 300
     config.hill_climbing_iterations = climb
     config.initial_temperature = itemp
-    config.final_temperature = ftemp
     config.cooling_factor = cool
     config.annealing_iterations = iter
     config.annealing_strength = strg
-    config.early_terminator_window = win
     config.multiprocessing_enabled = False
+    config.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
+    config.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
+    config.cache_dir = f".{prob}_cache"
     print(f"Using pyamosa {pyamosa.__version__}")
     optimizer = pyamosa.Optimizer(config)
-    optimizer.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
-    optimizer.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
-    optimizer.cache_dir = f".{prob}_cache"
     if attempts != 0:
         problem.max_attempt = attempts
-    optimizer.run(problem, improve = json_file)
+    if ftemp is not None:
+        termination = pyamosa.StopMinTemperature(ftemp)
+    elif win is not None:
+        termination = pyamosa.StopPhyWindow(win)
+    elif maxtime is not None:
+        termination = pyamosa.StopMaxTime(maxtime)
+    else:
+        print("You should set a termination criterion!")
+        exit()
+    optimizer.run(problem, termination_criterion = termination, improve = json_file)
+    print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
     optimizer.archive_to_json(f"{prob}_final_archive.json")

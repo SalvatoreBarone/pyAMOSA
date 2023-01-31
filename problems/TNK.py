@@ -14,12 +14,12 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, pyamosa, numpy as np
+import pyamosa, numpy as np
 
 
-class TNK(pyamosa.Optimizer.Problem):
+class TNK(pyamosa.Problem):
     def __init__(self):
-        pyamosa.Optimizer.Problem.__init__(self, 2, [pyamosa.Optimizer.Type.REAL] * 2, [0.0000001] * 2, [np.pi] * 2, 2, 2)
+        pyamosa.Problem.__init__(self, 2, [pyamosa.Type.REAL] * 2, [0.0000001] * 2, [np.pi] * 2, 2, 2)
 
     def evaluate(self, x, out):
         f1 = x[0]

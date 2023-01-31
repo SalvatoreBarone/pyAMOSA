@@ -14,15 +14,15 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, pyamosa, numpy as np
+import pyamosa, numpy as np
 
 
-class ZDT3(pyamosa.Optimizer.Problem):
+class ZDT3(pyamosa.Problem):
     n_var = 30
 
     def __init__(self):
 
-        pyamosa.Optimizer.Problem.__init__(self, ZDT3.n_var, [pyamosa.Optimizer.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
+        pyamosa.Problem.__init__(self, ZDT3.n_var, [pyamosa.Type.REAL] * ZDT3.n_var, [0.0] * ZDT3.n_var, [1.0] * ZDT3.n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = x[0]
