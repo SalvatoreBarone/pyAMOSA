@@ -15,11 +15,14 @@ RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 from .StopCriterion import StopCriterion
-
+import numpy as np
 class StopPhyWindow(StopCriterion):
     def __init__(self, termination_window : int):
         assert termination_window > 0
-        self.window_width = termination_window
+        self.window_width = int(termination_window)
 
     def check_termination(self, optimizer):
-        return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width :] <= np.finfo(float).eps))
+        return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width:] <= np.finfo(float).eps))
+
+    def info(self):
+        print(f"IGD window width: {self.window_width}")

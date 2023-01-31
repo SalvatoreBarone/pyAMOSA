@@ -21,6 +21,7 @@ from .DataType import Type
 from .Config import Config
 from .Problem import Problem
 from .StopCriterion import StopCriterion
+from .StopMinTemperature import StopMinTemperature
 class Optimizer:
     hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
     minimize_checkpoint_file = "minimize_checkpoint.json"
@@ -39,7 +40,7 @@ class Optimizer:
         self.old_norm_objectives = []
         self.phy = []
 
-    def run(self, problem : Problem, termination_criterion : StopCriterion, improve : str = None, remove_checkpoints : bool = True):
+    def run(self, problem : Problem, termination_criterion : StopCriterion = StopMinTemperature(1e-10), improve : str = None, remove_checkpoints : bool = True):
         problem.load_cache(self.config.cache_dir)
         self.current_temperature = self.config.initial_temperature
         # self.temperature = Optimizer.matter_temperatures(self.config.initial_temperature, self.final_temperature, self.config.cooling_factor)
@@ -205,7 +206,7 @@ class Optimizer:
                 self.print_statistics(problem)
             self.save_checkpoint_minimize()
             problem.store_cache(self.config.cache_dir)
-        print("Matter is now solid. Try using a hammer...")
+        print("Termination criterion has been met.")
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
@@ -274,6 +275,7 @@ class Optimizer:
             self.old_norm_objectives = normalized_objectives
             return retvalue
         except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
+            self.phy.append(0)
             return (0, 0, 0)
 
     def print_statistics(self, problem):
@@ -283,16 +285,6 @@ class Optimizer:
         else:
             feasible, cv_min, cv_avg = Optimizer.compute_cv(self.archive)
             tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.current_temperature, self.n_eval, len(self.archive), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
-
-    def check_early_termination(self):
-        return (
-            self.early_termination_window != 0
-            and len(self.phy) > self.early_termination_window
-            and all(
-                self.phy[-self.early_termination_window :]
-                <= np.finfo(float).eps
-            )
-        )
 
     def save_checkpoint_minimize(self):
         checkpoint = {

@@ -20,8 +20,11 @@ from .StopCriterion import StopCriterion
 class StopMinTemperature(StopCriterion):
     def __init__(self, min_temperature : float):
         assert min_temperature > 0
-        self.min_temperature = min_temperature
+        self.min_temperature = float(min_temperature)
         pass
 
     def check_termination(self, optimizer):
-        return (optimizer.current_temperature < self.min_temperature) 
+        return (optimizer.current_temperature < self.min_temperature)
+
+    def info(self):
+        print(f"Minumum temperature: {self.min_temperature} degrees")

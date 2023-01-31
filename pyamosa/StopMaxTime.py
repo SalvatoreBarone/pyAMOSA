@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import time
+import time, datetime
 from .StopCriterion import StopCriterion
 
 
@@ -24,3 +24,6 @@ class StopMaxTime(StopCriterion):
 
     def check_termination(self, optimizer):
         return (time.time() - optimizer.duration > self.max_seconds)
+
+    def info(self):
+        print(f"Maximum duration: {str(datetime.timedelta(seconds=self.max_seconds))}")

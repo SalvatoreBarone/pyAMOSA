@@ -21,3 +21,6 @@ class StopCriterion:
 
     def check_termination(self, optimizer):
         pass
+
+    def info(self):
+        pass
