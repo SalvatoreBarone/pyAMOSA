@@ -415,7 +415,7 @@ class Optimizer:
 
     @staticmethod
     def domination_amount(x, y, r):
-        return np.prod([abs(i - j) / k for i, j, k in zip(x["f"], y["f"], r)])
+        return np.prod([abs(i - j) / k if k != 0 else 0 for i, j, k in zip(x["f"], y["f"], r)])
 
     @staticmethod
     def compute_fitness_range(archive, current_point, new_point):
