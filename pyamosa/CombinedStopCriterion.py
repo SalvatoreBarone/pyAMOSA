@@ -14,19 +14,21 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import time, datetime
-from .StopCriterion import StopCriterion
+from .StopMaxTime import StopMaxTime
+from .StopMinTemperature import StopMinTemperature
+from .StopPhyWindow import StopPhyWindow
 
-
-class StopMaxTime(StopCriterion):
-    def __init__(self, max_duration : str):
-        self.max_seconds = sum(int(i) * j for i,j in zip(max_duration.split(':'), [3600, 60, 1])) if max_duration is not None else None
+class CombinedStopCriterion():
+    def __init__(self, max_duration : str, min_temperature : float, termination_window: int):
+        self.max_duration = StopMaxTime(termination_window)
+        self.min_temperat = StopMinTemperature(min_temperature)
+        self.max_duration = StopMaxTime(max_duration)
 
     def check_termination(self, optimizer):
-        if self.max_seconds is None:
-            return False
-        else:
-            return (time.time() - optimizer.duration > self.max_seconds)
+        return self.max_duration.check_termination(optimizer) or self.min_temperat.check_termination(optimizer) or self.max_duration.check_termination(optimizer)
 
     def info(self):
-        print(f"Maximum duration: {str(datetime.timedelta(seconds=self.max_seconds))}")
+        self.max_duration.info()
+        self.min_temperat.info()
+        self.max_duration.info()
+        

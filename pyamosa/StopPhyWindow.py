@@ -18,10 +18,11 @@ from .StopCriterion import StopCriterion
 import numpy as np
 class StopPhyWindow(StopCriterion):
     def __init__(self, termination_window : int):
-        assert termination_window > 0
-        self.window_width = int(termination_window)
+        self.window_width = termination_window
 
     def check_termination(self, optimizer):
+        if self.window_width is None:
+            return False
         return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width:] <= np.finfo(float).eps))
 
     def info(self):

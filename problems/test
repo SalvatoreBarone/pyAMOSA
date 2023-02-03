@@ -91,15 +91,8 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     optimizer = pyamosa.Optimizer(config)
     if attempts != 0:
         problem.max_attempt = attempts
-    if ftemp is not None:
-        termination = pyamosa.StopMinTemperature(ftemp)
-    elif win is not None:
-        termination = pyamosa.StopPhyWindow(win)
-    elif maxtime is not None:
-        termination = pyamosa.StopMaxTime(maxtime)
-    else:
-        print("You should set a termination criterion!")
-        exit()
+    termination = pyamosa.CombinedStopCriterion(maxtime, ftemp, win)
+    termination.info()
     optimizer.run(problem, termination_criterion = termination, improve = json_file)
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
