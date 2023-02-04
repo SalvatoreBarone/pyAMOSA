@@ -20,7 +20,7 @@ from .StopPhyWindow import StopPhyWindow
 
 class CombinedStopCriterion():
     def __init__(self, max_duration : str, min_temperature : float, termination_window: int):
-        self.max_duration = StopMaxTime(termination_window)
+        self.max_duration = StopPhyWindow(termination_window)
         self.min_temperat = StopMinTemperature(min_temperature)
         self.max_duration = StopMaxTime(max_duration)
 
