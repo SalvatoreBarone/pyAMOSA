@@ -438,14 +438,21 @@ class Optimizer:
 
     @staticmethod
     def impose_domain_constraints(problem, x):
-        # impose constraints the hard way
-        lb = np.array(problem.lower_bound)
-        ub = np.array(problem.upper_bound)
-        dv = np.array(x["x"])
-        dv = np.where(dv < ub, dv, ub - problem.min_step)
-        dv = np.where(dv >= lb, dv, lb)
-        return dv.tolist()
-        
+        try: 
+            lb = np.array(problem.lower_bound)
+            ub = np.array(problem.upper_bound)
+            dv = np.array(x["x"])
+            dv = np.where(dv < ub, dv, ub - problem.min_step)
+            dv = np.where(dv >= lb, dv, lb)
+            return dv.tolist()
+        except ValueError as e:
+            print(e)
+            print(f"dv: {dv}, len(dv) {len(dv)}")
+            print(f"lb: {lb}, len(lb) {len(lb)}")
+            print(f"ub: {ub}, len(ub) {len(ub)}")
+            exit()
+
+
     @staticmethod
     def hill_climbing_adaptive_step(problem, x, dimention, increase):
         safety_exit = problem.max_attempt # a safety-exit prevents infinite loop, using a counter variable
