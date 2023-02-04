@@ -29,4 +29,5 @@ class StopMaxTime(StopCriterion):
             return (time.time() - optimizer.duration > self.max_seconds)
 
     def info(self):
-        print(f"Maximum duration: {str(datetime.timedelta(seconds=self.max_seconds))}")
+        if self.max_seconds is not None:
+            print(f"Maximum duration: {str(datetime.timedelta(seconds=self.max_seconds))}")

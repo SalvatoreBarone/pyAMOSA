@@ -26,4 +26,5 @@ class StopPhyWindow(StopCriterion):
         return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width:] <= np.finfo(float).eps))
 
     def info(self):
-        print(f"IGD window width: {self.window_width}")
+        if self.window_width is not None:
+            print(f"IGD window width: {self.window_width}")

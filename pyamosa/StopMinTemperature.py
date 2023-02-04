@@ -27,4 +27,5 @@ class StopMinTemperature(StopCriterion):
         return (optimizer.current_temperature < self.min_temperature)
 
     def info(self):
-        print(f"Minumum temperature: {self.min_temperature} degrees")
+        if self.min_temperature is not None:
+            print(f"Minumum temperature: {self.min_temperature} degrees")
