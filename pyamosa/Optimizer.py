@@ -103,13 +103,29 @@ class Optimizer:
     def constraint_violation(self):
         return np.array([s["g"] for s in self.archive])
 
-    def plot_pareto(self, problem : Problem, pdf_file : str, fig_title : str = "Pareto front", axis_labels : list = None):
+    def plot_pareto(self, problem : Problem, pdf_file : str, fig_title : str = "Pareto front", axis_labels : list = None, color = "k", marker = "."):
+        def draw_proj(axis, data_x, data_y, data_z, color, ranges = [0.1, 0.1, 0.1]):
+            xlim = axis.get_xlim()
+            ylim = axis.get_ylim()
+            zlim = axis.get_zlim()
+            for x, y, z in zip (data_x, data_y, data_z):
+                line_x = np.arange(x, xlim[1], ranges[0])
+                line_y = np.arange(ylim[0], y, ranges[1])
+                line_z = np.arange(zlim[0], z, ranges[2])
+                axis.plot(line_x, np.full(np.shape(line_x), y), np.full(np.shape(line_x), zlim[0]), f":{color}")
+                axis.plot(np.full(np.shape(line_y), x), line_y, np.full(np.shape(line_y), zlim[0]), f":{color}")
+                axis.plot(np.full(np.shape(line_z), x), np.full(np.shape(line_z), y), line_z,       f":{color}")
+            axis.set_xlim(xlim)
+            axis.set_ylim(ylim)
+            axis.set_zlim(zlim)
+
         if axis_labels is None:
             axis_labels = [f"f{str(i)}" for i in range(problem.num_of_objectives)]
+            
         F = self.pareto_front()
         if problem.num_of_objectives == 2:
             plt.figure(figsize = (10, 10), dpi = 300)
-            plt.plot(F[:, 0], F[:, 1], 'k.')
+            plt.plot(F[:, 0], F[:, 1], f'{color}{marker}')
             plt.xlabel(axis_labels[0])
             plt.ylabel(axis_labels[1])
             plt.title(fig_title)
@@ -117,13 +133,15 @@ class Optimizer:
         elif problem.num_of_objectives == 3:
             fig = plt.figure()
             ax = fig.add_subplot(projection = '3d')
+            ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = marker, color = color, depthshade = False)
+            draw_proj(ax, F[:, 0], F[:, 1], F[:, 2], color = color)
             ax.set_xlabel(axis_labels[0])
             ax.set_ylabel(axis_labels[1])
             ax.set_zlabel(axis_labels[2])
+            ax.set_proj_type('ortho')
             plt.title(fig_title)
-            ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = '.', color = 'k')
             plt.tight_layout()
-            plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
+            plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0.5)
 
     def archive_to_json(self, json_file : str):
         try:
