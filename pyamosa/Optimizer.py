@@ -189,13 +189,13 @@ class Optimizer:
             if self.config.multiprocessing_enabled:
                 args = [[problem, self.config.hill_climbing_iterations]] * cpu_count()
                 print(f"Performing Initial Hill Climbing Step using {cpu_count()} threads")
-                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing", leave = False):
+                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, cpu_count(), desc = "Hill climbing", leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}"):
                     with Pool(cpu_count()) as pool:
                         new_points = pool.starmap(Optimizer.hillclimb_thread_loop, args)
                     initial_candidate_solutions += new_points
                     self.save_checkpoint_hillclimb(initial_candidate_solutions)
             else:
-                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, desc = "Hill climbing", leave = False):
+                for _ in trange(len(initial_candidate_solutions), num_of_initial_candidate_solutions, desc = "Hill climbing", leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}"):
                     initial_candidate_solutions.append(Optimizer.hillclimb_thread_loop(problem, self.config.hill_climbing_iterations))
                     self.save_checkpoint_hillclimb(initial_candidate_solutions)
         for x in initial_candidate_solutions:
@@ -228,7 +228,7 @@ class Optimizer:
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
-        for _ in trange(annealing_iterations, desc = "Annealing", file=sys.stdout, leave = False) if print_allowed else range(annealing_iterations):
+        for _ in trange(annealing_iterations, desc = "Annealing", file=sys.stdout, leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}") if print_allowed else range(annealing_iterations):
             new_point = Optimizer.random_perturbation(problem, current_point, annealing_strength)
             fitness_range = Optimizer.compute_fitness_range(archive, current_point, new_point)
             s_dominating_y = [s for s in archive if Optimizer.dominates(s, new_point)]
@@ -532,7 +532,7 @@ class Optimizer:
     @staticmethod
     def nondominated_merge(archives):
         nondominated_archive = []
-        for archive in tqdm(archives, desc = "Merging archives: ", leave = False):
+        for archive in tqdm(archives, desc = "Merging archives: ", leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}"):
             for x in archive:
                 Optimizer.add_to_archive(nondominated_archive, x)
         return nondominated_archive
@@ -583,7 +583,7 @@ class Optimizer:
             # then the rest are initialized w/ probabilities proportional to their distances to the first
             # Pick a random point from train data for first centroid
             centroids = [random.choice(archive)]
-            for _ in trange(num_of_clusters - 1, desc = "Centroids", leave = False) if print_allowed else range(num_of_clusters - 1):
+            for _ in trange(num_of_clusters - 1, desc = "Centroids", leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}") if print_allowed else range(num_of_clusters - 1):
                 # Calculate normalized distances from points to the centroids
                 dists = np.array([np.nansum([np.linalg.norm(np.array(centroid["f"]) - np.array(p["f"])) for centroid in centroids]) for p in archive])
                 try:
@@ -599,7 +599,7 @@ class Optimizer:
                     print(f"Normalized distance: {dists / np.nansum(dists)}")
                     exit()
             # Iterate, adjusting centroids until converged or until passed max_iter
-            for _ in trange(max_iterations, desc = "K-means", leave = False) if print_allowed else range(max_iterations):
+            for _ in trange(max_iterations, desc = "K-means", leave = False, bar_format="{desc:40} {percentage:3.0f}% |{bar:60}{r_bar}{bar:-10b}") if print_allowed else range(max_iterations):
                 # Sort each datapoint, assigning to nearest centroid
                 sorted_points = [[] for _ in range(num_of_clusters)]
                 for x in archive:
