@@ -21,6 +21,7 @@ from .Config import Config
 from .Problem import Problem
 from .StopCriterion import StopCriterion
 from .StopMinTemperature import StopMinTemperature
+from .CombinedStopCriterion import CombinedStopCriterion
 class Optimizer:
     hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
     minimize_checkpoint_file = "minimize_checkpoint.json"
@@ -80,6 +81,7 @@ class Optimizer:
             if remove_checkpoints:
                 os.remove(self.config.hill_climb_checkpoint_file)
         assert len(self.archive) > 0, "Archive not initialized"
+        print(f"Going to perform {self.tot_iterations(termination_criterion)} annealing iterations")
         Optimizer.print_header(problem)
         self.print_statistics(problem)
         self.main_loop(problem, termination_criterion)
@@ -208,6 +210,14 @@ class Optimizer:
             self.save_checkpoint_minimize()
             problem.store_cache(self.config.cache_dir)
         print("Termination criterion has been met.")
+
+    def tot_iterations(self, termination_criterion : StopCriterion):
+        min_temperature = 1e-10
+        if isinstance(termination_criterion, StopMinTemperature):
+            min_temperature = termination_criterion.min_temperature
+        elif isinstance(termination_criterion, CombinedStopCriterion):
+            min_temperature = termination_criterion.min_temperat.min_temperature
+        return np.ceil(np.log(min_temperature/self.current_temperature) / np.log(self.config.cooling_factor))
 
     @staticmethod
     def annealing_thread_loop(problem, archive, current_point, current_temperature, annealing_iterations, annealing_strength, soft_limit, hard_limit, clustering_max_iterations, clustering_before_return, print_allowed):
