@@ -25,6 +25,6 @@ from .StopPhyWindow import StopPhyWindow
 from .CombinedStopCriterion import CombinedStopCriterion
 
 name = "pyamosa"
-__version__ = "1.3.7.2"
+__version__ = "1.3.7.3"
 __author__ = "Salvatore Barone"
 __credits__ = "Department of Electrical Engineering and Information Technologies, University of Naples Federico II, Via Claudio 21, Naples, Italy"

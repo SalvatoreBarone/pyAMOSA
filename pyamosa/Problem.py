@@ -48,7 +48,7 @@ class Problem:
 
     @staticmethod
     def get_cache_key(s):
-        return ''.join([str(i) for i in s["x"]])
+        return ','.join([str(i) for i in s["x"]])
 
     def is_cached(self, s):
         return self.get_cache_key(s) in self.cache.keys()
