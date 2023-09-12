@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, json, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
+import os, sys, json5, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
 from BNH import *
 from OSY import *
 from TNK import *
@@ -40,7 +40,7 @@ def cli():
 def evaluate(prob):
     problem = problems[prob]
     opt = problem.optimums()
-    archive = json.load(open(f"{prob}_final_archive.json"))
+    archive = json5.load(open(f"{prob}_final_archive.json5"))
     real_pareto = np.array([s["f"] for s in opt])
     est_pareto = np.array([s["f"] for s in archive])
     axis_labels = ["f0", "f1"]
@@ -84,8 +84,8 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     config.annealing_iterations = iter
     config.annealing_strength = strg
     config.multiprocessing_enabled = False
-    config.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json"
-    config.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json"
+    config.hill_climb_checkpoint_file = f"{prob}_hill_climbing_checkpoint.json5"
+    config.minimize_checkpoint_file = f"{prob}_minimize_checkpoint.json5"
     config.cache_dir = f".{prob}_cache"
     print(f"Using pyamosa {pyamosa.__version__}")
     optimizer = pyamosa.Optimizer(config)
@@ -97,7 +97,7 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
-    optimizer.archive_to_json(f"{prob}_final_archive.json")
+    optimizer.archive_to_json(f"{prob}_final_archive.json5")
     optimizer.plot_pareto(problem, f"{prob}_pareto_front.pdf")
 
 

@@ -28,8 +28,8 @@ class Config:
             annealing_iterations : int = 500,
             annealing_strength : int = 1,
             multiprocessing_enabled : bool = True,
-            hill_climb_checkpoint_file : str = "hill_climb_checkpoint.json",
-            minimize_checkpoint_file : str = "minimize_checkpoint.json",
+            hill_climb_checkpoint_file : str = "hill_climb_checkpoint.json5",
+            minimize_checkpoint_file : str = "minimize_checkpoint.json5",
             cache_dir :str = ".cache"
             ):
 

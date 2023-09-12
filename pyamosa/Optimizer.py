@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import sys, copy, random, time, os, json, warnings, numpy as np, matplotlib.pyplot as plt
+import sys, copy, random, time, os, json5, warnings, numpy as np, matplotlib.pyplot as plt
 from tqdm import tqdm, trange
 from .DataType import Type
 from .Config import Config
@@ -23,8 +23,8 @@ from .StopCriterion import StopCriterion
 from .StopMinTemperature import StopMinTemperature
 from .CombinedStopCriterion import CombinedStopCriterion
 class Optimizer:
-    hill_climb_checkpoint_file = "hill_climb_checkpoint.json"
-    minimize_checkpoint_file = "minimize_checkpoint.json"
+    hill_climb_checkpoint_file = "hill_climb_checkpoint.json5"
+    minimize_checkpoint_file = "minimize_checkpoint.json5"
     cache_dir = ".cache"
 
     def __init__(self, config : Config):
@@ -147,7 +147,7 @@ class Optimizer:
     def archive_to_json(self, json_file : str):
         try:
             with open(json_file, 'w') as outfile:
-                outfile.write(json.dumps(self.archive))
+                json5.dumps(self.archive, outfile)
         except TypeError as e:
             print(self.archive)
             print(e)
@@ -174,14 +174,14 @@ class Optimizer:
     def archive_from_json(self, problem, json_file):
         print("Initializing archive from JSON file...")
         with open(json_file) as f:
-            archive = json.load(f)
+            archive = json5.load(f)
         initial_candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
         self.initial_hill_climbing(problem, initial_candidate_solutions)
 
     def read_final_archive_from_json(self, problem : Problem, json_file : str):
         print("Reading archive from JSON file...")
         with open(json_file) as file:
-            archive = json.load(file)
+            archive = json5.load(file)
         self.archive = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
 
     def initial_hill_climbing(self, problem, initial_candidate_solutions):
@@ -308,9 +308,8 @@ class Optimizer:
             "arc": self.archive
         }
         try:
-            json_string = json.dumps(checkpoint)
             with open(self.config.minimize_checkpoint_file, 'w') as outfile:
-                outfile.write(json_string)
+                json5.dumps(checkpoint, outfile)
         except TypeError as e:
             print(checkpoint)
             print(e)
@@ -318,9 +317,8 @@ class Optimizer:
 
     def save_checkpoint_hillclimb(self, candidate_solutions):
         try:
-            json_string = json.dumps(candidate_solutions)
             with open(self.config.hill_climb_checkpoint_file, 'w') as outfile:
-                outfile.write(json_string)
+                json5.dumps(candidate_solutions, outfile)
         except TypeError as e:
             print(candidate_solutions)
             print(e)
@@ -329,7 +327,7 @@ class Optimizer:
     def read_checkpoint_minimize(self, problem):
         print("Resuming minimize from checkpoint...")
         with open(self.config.minimize_checkpoint_file) as file:
-            checkpoint = json.load(file)
+            checkpoint = json5.load(file)
         self.n_eval = int(checkpoint["n_eval"])
         self.current_temperature = float(checkpoint["t"])
         self.ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
@@ -341,7 +339,7 @@ class Optimizer:
     def read_checkpoint_hill_climb(self, problem):
         print("Resuming hill-climbing from checkpoint...")
         with open(self.config.hill_climb_checkpoint_file) as file:
-            checkpoint = json.load(file)
+            checkpoint = json5.load(file)
         return [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
 
 

@@ -14,7 +14,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import json, os, sys, math
+import json5, os, sys, math
 from itertools import islice
 from distutils.dir_util import mkpath
 
@@ -28,9 +28,9 @@ class MultiFileCacheHandle:
         cache = {}
         if os.path.isdir(self.directory):
             for f in os.listdir(self.directory):
-                if f.endswith('.json'):
+                if f.endswith('.json5'):
                     with open(f"{self.directory}/{f}") as j:
-                        tmp = json.load(j)
+                        tmp = json5.load(j)
                         cache = {**cache, **tmp}
         print(f"{len(cache)} cache entries loaded from {self.directory}")
         return cache
@@ -38,18 +38,18 @@ class MultiFileCacheHandle:
     def write(self, cache : list):
         if os.path.isdir(self.directory):
             for file in os.listdir(self.directory):
-                if file.endswith('.json'):
+                if file.endswith('.json5'):
                     os.remove(f"{self.directory}/{file}")
         else:
             mkpath(self.directory)
         total_entries = len(cache)
-        total_size = sys.getsizeof(json.dumps(cache))
+        total_size = sys.getsizeof(json5.dumps(cache))
         avg_entry_size = math.ceil(total_size / total_entries)
         max_entries_per_file = int(self.max_size_mb * (2 ** 20) / avg_entry_size)
         splits = int(math.ceil(total_entries / max_entries_per_file))
         for item, count in zip(MultiFileCacheHandle.chunks(cache, max_entries_per_file), range(splits)):
-            with open(f"{self.directory}/{count:09d}.json", 'w') as outfile:
-                outfile.write(json.dumps(item))
+            with open(f"{self.directory}/{count:09d}.json5", 'w') as outfile:
+                json5.dumps(item, outfile)
 
     @staticmethod
     def chunks(data, max_entries : int):
