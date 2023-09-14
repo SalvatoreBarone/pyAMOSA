@@ -43,13 +43,13 @@ class MultiFileCacheHandle:
         else:
             mkpath(self.directory)
         total_entries = len(cache)
-        total_size = sys.getsizeof(json5.dumps(cache))
+        total_size = sys.getsizeof(cache)
         avg_entry_size = math.ceil(total_size / total_entries)
         max_entries_per_file = int(self.max_size_mb * (2 ** 20) / avg_entry_size)
         splits = int(math.ceil(total_entries / max_entries_per_file))
         for item, count in zip(MultiFileCacheHandle.chunks(cache, max_entries_per_file), range(splits)):
             with open(f"{self.directory}/{count:09d}.json5", 'w') as outfile:
-                json5.dumps(item, outfile)
+                json5.dump(item, outfile)
 
     @staticmethod
     def chunks(data, max_entries : int):

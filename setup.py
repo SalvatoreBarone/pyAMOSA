@@ -12,7 +12,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 setup(
     name="pyAMOSA",
-    version="1.3.7.4",
+    version="1.3.7.5",
     description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic",
     long_description="Python implementation of the Archived Multi-Objective Simulated Annealing optimization heuristic. Take a look at https://github.com/SalvatoreBarone/pyAMOSA.",
     url="https://github.com/SalvatoreBarone/pyAMOSA",
@@ -26,10 +26,10 @@ setup(
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Programming Language :: Python :: 3.9"
     ],
-    keywords="Verilator Wrapper Verilog",
+    keywords="Multi Objective Optimization",
     packages=["pyamosa"],
     include_package_data=True,
-    install_requires=["numpy", "matplotlib", "click", "tqdm"],
+    install_requires=["numpy", "matplotlib", "click", "tqdm", "json5"],
     # setup_requires=["pytest-runner"],
     # tests_require=["pytest"],
     # entry_points={

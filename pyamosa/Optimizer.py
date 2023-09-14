@@ -78,7 +78,7 @@ class Optimizer:
         else:
             self.random_archive(problem)
             self.save_checkpoint_minimize()
-            if remove_checkpoints:
+            if remove_checkpoints and os.path.exists(self.config.hill_climb_checkpoint_file):
                 os.remove(self.config.hill_climb_checkpoint_file)
         assert len(self.archive) > 0, "Archive not initialized"
         print(f"Going to perform {self.tot_iterations(termination_criterion)} annealing iterations")
@@ -309,7 +309,7 @@ class Optimizer:
         }
         try:
             with open(self.config.minimize_checkpoint_file, 'w') as outfile:
-                json5.dumps(checkpoint, outfile)
+                json5.dump(checkpoint, outfile)
         except TypeError as e:
             print(checkpoint)
             print(e)
@@ -318,7 +318,7 @@ class Optimizer:
     def save_checkpoint_hillclimb(self, candidate_solutions):
         try:
             with open(self.config.hill_climb_checkpoint_file, 'w') as outfile:
-                json5.dumps(candidate_solutions, outfile)
+                json5.dump(candidate_solutions, outfile)
         except TypeError as e:
             print(candidate_solutions)
             print(e)
