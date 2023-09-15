@@ -15,16 +15,16 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import os, sys, json5, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
-from BNH import *
-from OSY import *
-from TNK import *
-from ZDT1 import *
-from ZDT2 import *
-from ZDT3 import *
-from ZDT4 import *
-from ZDT6 import *
-from metrics import *
+import json5, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
+from problems.BNH import *
+from problems.OSY import *
+from problems.TNK import *
+from problems.ZDT1 import *
+from problems.ZDT2 import *
+from problems.ZDT3 import *
+from problems.ZDT4 import *
+from problems.ZDT6 import *
+from problems.metrics import *
 
 
 problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
@@ -36,7 +36,7 @@ def cli():
 
 
 @cli.command('evaluate')
-@click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
+@click.argument('prob', type = click.Choice(list(problems.keys())), required = True)
 def evaluate(prob):
     problem = problems[prob]
     opt = problem.optimums()
@@ -56,7 +56,7 @@ def evaluate(prob):
 
 
 @cli.command('run')
-@click.option('--prob', type = str, required = True, help = 'Benchmark problem [BNH, OSY, TNK, ZDT1, ZDT2, ZDT3, ZDT4, ZDT6]')
+@click.argument('prob', type = click.Choice(list(problems.keys())), required = True)
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
@@ -96,9 +96,8 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
     optimizer.run(problem, termination_criterion = termination, improve = json_file)
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
-    optimizer.archive_to_csv(problem, f"{prob}_final_archive.csv")
-    optimizer.archive_to_json(f"{prob}_final_archive.json5")
-    optimizer.plot_pareto(problem, f"{prob}_pareto_front.pdf")
+    optimizer.archive.write_json(f"{prob}_final_archive.json5")
+    optimizer.archive.plot_front(problem.num_of_objectives, f"{prob}_pareto_front.pdf")
 
 
 

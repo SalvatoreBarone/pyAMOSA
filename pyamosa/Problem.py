@@ -14,11 +14,13 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import numpy as np
+import numpy as np, random
 from .MultiFileCacheHandle import MultiFileCacheHandle
 from .DataType import Type
+from .Pareto import Pareto
 
 class Problem:
+    
     def __init__(self, num_of_variables : int , types : list, lower_bounds : list, upper_bounds : list, num_of_objectives : int, num_of_constraints : int):
         assert num_of_variables == len(types), "Mismatch in the specified number of variables and their type declaration"
         assert num_of_variables == len(lower_bounds), "Mismatch in the specified number of variables and their lower bound declaration"
@@ -45,9 +47,41 @@ class Problem:
 
     def optimums(self):
         return []
+    
+    def lower_point(self):
+        x = {"x": self.lower_bound, "f": [0] * self.num_of_objectives, "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None}
+        self.get_objectives(x)
+        return x
 
-    @staticmethod
-    def get_cache_key(s):
+    def upper_point(self):
+        x = {"x": [ (x - 1) if t == Type.INTEGER else (x - 2 * np.finfo(float).eps) for x, t in zip(self.upper_bound, self.types)], "f": [0] * self.num_of_objectives, "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None}
+        self.get_objectives(x)
+        return x
+
+    def random_point(self):
+        x = {"x": [lb if lb == ub else random.randrange(lb, ub) if tp == Type.INTEGER else random.uniform(lb, ub) for lb, ub, tp in zip(self.lower_bound, self.upper_bound, self.types)], "f": [0] * self.num_of_objectives, "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None}
+        self.get_objectives(x)
+        return x
+    
+    def get_objectives(self, s : dict):
+        for i, t in zip(s["x"], self.types):
+            assert isinstance(i, int if t == Type.INTEGER else float), f"Type mismatch. This decision variable is {t}, but the internal type is {type(i)}. Please repurt this bug"
+        self.total_calls += 1
+        # if s["x"] is in the cache, do not call problem.evaluate, but return the cached-entry
+        if self.is_cached(s):
+            s["f"] = self.cache[self.get_cache_key(s)]["f"]
+            s["g"] = self.cache[self.get_cache_key(s)]["g"]
+            self.cache_hits += 1
+        else:
+            # if s["x"] is not in the cache, call "evaluate" and add s["x"] to the cache
+            out = {"f": [0] * self.num_of_objectives, "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None}
+            self.evaluate(s["x"], out)
+            s["f"] = out["f"]
+            s["g"] = out["g"]
+            self.add_to_cache(s)
+
+    def get_cache_key(self, s : dict):
+        assert "x" in s, f"s has wrong format ({s})"
         return ','.join([str(i) for i in s["x"]])
 
     def is_cached(self, s):
@@ -64,7 +98,7 @@ class Problem:
         handler = MultiFileCacheHandle(directory)
         handler.write(self.cache)
 
-    def archive_to_cache(self, archive):
-        for s in archive:
+    def archive_to_cache(self, archive : Pareto):
+        for s in archive.candidate_solutions:
             if not self.is_cached(s):
                 self.add_to_cache(s)

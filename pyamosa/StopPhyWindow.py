@@ -23,7 +23,7 @@ class StopPhyWindow(StopCriterion):
     def check_termination(self, optimizer):
         if self.window_width is None:
             return False
-        return (len(optimizer.phy) > self.window_width and all(optimizer.phy[-self.window_width:] <= np.finfo(float).eps))
+        return (len(optimizer.archive.phy) > self.window_width and all(optimizer.archive.phy[-self.window_width:] <= np.finfo(float).eps))
 
     def info(self):
         if self.window_width is not None:
