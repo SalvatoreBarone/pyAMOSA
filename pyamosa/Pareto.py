@@ -64,14 +64,14 @@ class Pareto:
         return input_set[np.nanargmin(d)]
     
     @staticmethod
-    def kmeans_clustering(set_of_points, num_of_clusters, max_iterations, print_allowed):
+    def kmeans_clustering(set_of_points, num_of_clusters, max_iterations):
         assert max_iterations > 0
         if 1 < num_of_clusters < len(set_of_points):
             # Initialize the centroids, using the "k-means++" method, where a random datapoint is selected as the first,
             # then the rest are initialized w/ probabilities proportional to their distances to the first
             # Pick a random point from train data for first centroid
             centroids = [random.choice(set_of_points)]
-            for _ in trange(num_of_clusters - 1, desc = "Centroids", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}") if print_allowed else range(num_of_clusters - 1):
+            for _ in trange(num_of_clusters - 1, desc = "Centroids", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
                 # Calculate normalized distances from points to the centroids
                 dists = np.array([np.nansum([np.linalg.norm(np.array(centroid["f"]) - np.array(p["f"])) for centroid in centroids]) for p in set_of_points])
                 try:
@@ -87,7 +87,7 @@ class Pareto:
                     # print(f"Normalized distance: {dists / np.nansum(dists)}")
                     exit()
             # Iterate, adjusting centroids until converged or until passed max_iter
-            for _ in trange(max_iterations, desc = "K-means", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}") if print_allowed else range(max_iterations):
+            for _ in trange(max_iterations, desc = "K-means", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
                 # Sort each datapoint, assigning to nearest centroid
                 sorted_points = [[] for _ in range(num_of_clusters)]
                 for x in set_of_points:
@@ -97,7 +97,7 @@ class Pareto:
                 # Push current centroids to previous, reassign centroids as mean of the points belonging to them
                 prev_centroids = centroids
                 centroids = [Pareto.centroid_of_set(cluster) if len(cluster) != 0 else centroid for cluster, centroid in zip(sorted_points, prev_centroids)]
-                if np.array_equal(centroids, prev_centroids) and print_allowed:
+                if np.array_equal(centroids, prev_centroids):
                     break
             return centroids
         elif num_of_clusters == 1:
@@ -167,15 +167,15 @@ class Pareto:
             for x in pareto:
                 self.add(x)
                 
-    def clustering(self, num_of_constraints, max_points, max_iterations, print_allowed):
+    def clustering(self, num_of_constraints, max_points, max_iterations):
         if num_of_constraints == 0:
-            self.candidate_solutions = Pareto.kmeans_clustering(self.candidate_solutions, max_points, max_iterations, print_allowed)
+            self.candidate_solutions = Pareto.kmeans_clustering(self.candidate_solutions, max_points, max_iterations)
         feasible = [s for s in self.candidate_solutions if all(g <= 0 for g in s["g"])]
         unfeasible = [s for s in self.candidate_solutions if any(g > 0 for g in s["g"])]
         if len(feasible) > max_points:
-            self.candidate_solutions = Pareto.kmeans_clustering(feasible, max_points, max_iterations, print_allowed)
+            self.candidate_solutions = Pareto.kmeans_clustering(feasible, max_points, max_iterations)
         elif len(feasible) < max_points and len(unfeasible) != 0:
-            self.candidate_solutions = feasible + Pareto.kmeans_clustering(unfeasible, max_points - len(feasible), max_iterations, print_allowed)
+            self.candidate_solutions = feasible + Pareto.kmeans_clustering(unfeasible, max_points - len(feasible), max_iterations)
         else:
             self.candidate_solutions = feasible
     
