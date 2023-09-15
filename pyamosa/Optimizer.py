@@ -20,7 +20,7 @@ from .DataType import Type
 from .Config import Config
 from .Problem import Problem
 from .Pareto import Pareto
-from .HillClimbing import HillClimbing
+from .StochasticHillClimbing import StochasticHillClimbing
 from .StopCriterion import StopCriterion
 from .StopMinTemperature import StopMinTemperature
 from .CombinedStopCriterion import CombinedStopCriterion
@@ -64,7 +64,7 @@ class Optimizer:
             
         elif os.path.exists(self.config.hill_climb_checkpoint_file):
             print(f"Recovering Hill-climbing from {self.config.hill_climb_checkpoint_file}")
-            climber = HillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
+            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
             climber.read_checkpoint()
             print(f"Recovered {self.archive.size()} candidate solutions")
             climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.annealing_iterations)
@@ -76,7 +76,7 @@ class Optimizer:
                 os.remove(self.config.hill_climb_checkpoint_file)
                 
         else:
-            climber = HillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
+            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
             climber.init()
             climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.annealing_iterations)
             problem.archive_to_cache(self.archive)

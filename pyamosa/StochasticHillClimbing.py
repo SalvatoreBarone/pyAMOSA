@@ -20,7 +20,7 @@ from .Pareto import Pareto
 from .DataType import Type
 from tqdm import tqdm, trange
 
-class HillClimbing:
+class StochasticHillClimbing:
     
     def __init__(self, problem : Problem, pareto: Pareto, checkpoint_file : str = "hill_climb_checkpoint.json5") -> None:
         self.problem = problem
@@ -32,17 +32,37 @@ class HillClimbing:
         
     def run(self, max_num_of_candidates, max_iterations):
         for _ in trange(len(self.pareto.candidate_solutions), max_num_of_candidates, desc = "Hill climbing", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
-            dimention, increase = self.direction(self.problem)
-            x = self.problem.random_point()
-            for _ in trange(max_iterations, desc = "Walking...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
-                y = copy.deepcopy(x)
-                self.step(y, dimention, increase)
-                if Pareto.dominates(y, x) and Pareto.not_the_same(y, x):
-                    x = y
-                else:
-                    dimention, increase = self.direction(dimention)
-            self.pareto.candidate_solutions.append(x)
+            self.climb(self.problem.random_point(), max_iterations)
             self.save_checkpoint()
+
+    def climb(self, candidate, max_iterations):
+        direction = None
+        heading = None
+        step_size = None
+        for _ in trange(max_iterations, desc = "Climbing...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
+            if direction is None and heading is None:
+                direction = random.randrange(0, self.problem.num_of_variables)
+                heading = 1 if random.random() > 0.5 else -1
+                step_size = self.min_step(direction)
+            new_candidate = copy.deepcopy(candidate)
+            new_candidate["x"][direction] =  StochasticHillClimbing.clip(new_candidate["x"][direction] + (step_size * heading), self.problem.lower_bound[direction], self.problem.upper_bound[direction] - self.min_step(direction))
+            assert self.problem.lower_bound[direction] <= new_candidate["x"][direction] < self.problem.upper_bound[direction], f"Variable {direction} with value {new_candidate['x'][direction]} is out of bound for [{self.problem.lower_bound[direction]}, {self.problem.upper_bound[direction]}]"
+            self.problem.get_objectives(new_candidate)
+            if Pareto.dominates(new_candidate, candidate) or (not Pareto.dominates(new_candidate, candidate) and not Pareto.dominates(candidate, new_candidate)):
+                candidate = new_candidate
+                step_size = StochasticHillClimbing.clip(step_size * 2, self.min_step(direction), self.problem.upper_bound[direction] - self.min_step(direction) - new_candidate["x"][direction] if heading == 1 else new_candidate["x"][direction] - self.problem.lower_bound[direction])
+            else:
+                direction = None
+                heading = None
+        self.pareto.candidate_solutions.append(candidate)
+
+    def min_step(self, direction):
+        return 1 if self.problem.types[direction] == Type.INTEGER else (5 * np.finfo(float).eps)
+    
+    @staticmethod
+    def clip(x, xmin, xmax):
+        #assert xmin < xmax, f"xmin: {xmin}, xmax: {xmax}"
+        return max(min(x, xmax), xmin)
     
     def save_checkpoint(self):
         try:
@@ -58,31 +78,6 @@ class HillClimbing:
             checkpoint = json5.load(file)
         self.pareto.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], self.problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint]
 
-    def direction(self, current_dimention = None):
-        if current_dimention is None:
-            return random.randrange(0, self.problem.num_of_variables), 1 if random.random() > 0.5 else -1
-        increase = (random.random() > 0.5)
-        dimention = random.randrange(0, self.problem.num_of_variables)
-        while current_dimention == dimention:
-            dimention = random.randrange(0, self.problem.num_of_variables)
-        return dimention, increase
-
-    def step(self, x, dimention, increase):
-        safety_exit = self.problem.max_attempt # a safety-exit prevents infinite loop, using a counter variable
-        while safety_exit >= 0 and self.problem.is_cached(x):
-            safety_exit -= 1
-            tp = self.problem.types[dimention]
-            min_step = 1 if tp == Type.INTEGER else (2 * np.finfo(float).eps)
-            random_function = random.randrange if tp == Type.INTEGER else random.uniform
-            max_decrease = self.problem.lower_bound[dimention] - x["x"][dimention]
-            max_increase = self.problem.upper_bound[dimention] - x["x"][dimention] - min_step
-            step = 0
-            if increase and max_increase > 0:
-                step = random_function(0, max_increase) 
-            elif increase == False and max_decrease < 0:
-                step = random_function(max_decrease, 0)
-            x["x"][dimention] += step
-        self.problem.get_objectives(x)
 
 
 
