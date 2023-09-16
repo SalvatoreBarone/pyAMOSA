@@ -55,19 +55,22 @@ class Optimizer:
             self.read_checkpoint(problem)
             problem.archive_to_cache(self.archive)
         elif improve is not None:
+            print(f"Reading {improve}, and trying to improve a previous run...")
             self.archive.read_json(problem.types, improve)
+            problem.archive_to_cache(self.archive)
+            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
+            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
             problem.archive_to_cache(self.archive)
             if self.archive.size() > self.config.archive_hard_limit:
                 self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
             self.save_checkpoint()
-            
             
         elif os.path.exists(self.config.hill_climb_checkpoint_file):
             print(f"Recovering Hill-climbing from {self.config.hill_climb_checkpoint_file}")
             climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
             climber.read_checkpoint()
             print(f"Recovered {self.archive.size()} candidate solutions")
-            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.annealing_iterations)
+            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
             problem.archive_to_cache(self.archive)
             if self.archive.size() > self.config.archive_hard_limit:
                 self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
@@ -78,7 +81,7 @@ class Optimizer:
         else:
             climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
             climber.init()
-            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.annealing_iterations)
+            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
             problem.archive_to_cache(self.archive)
             if self.archive.size() > self.config.archive_hard_limit:
                 self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)

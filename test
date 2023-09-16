@@ -67,10 +67,10 @@ def evaluate(prob):
 @click.option('--iter', type = int, required = False, default = 2500, help = 'Annealing iterations')
 @click.option('--strg', type = int, required = False, default = 1, help = 'Perturbation strength')
 @click.option('--win', type = int, required = False, default = 10, help = 'PHY-based early-termination window size')
-@click.option('--json-file', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
+@click.option('--improve', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
 @click.option('--maxtime', type = str, required = False, default = None, help = 'Max duration (hh:mm:ss)')
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, json_file, attempts, maxtime):
+def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, improve, attempts, maxtime):
     """ Run a test problem """
     problem = problems[prob]
     config = pyamosa.Config
@@ -93,7 +93,7 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, jso
         problem.max_attempt = attempts
     termination = pyamosa.CombinedStopCriterion(maxtime, ftemp, win)
     termination.info()
-    optimizer.run(problem, termination_criterion = termination, improve = json_file)
+    optimizer.run(problem, termination_criterion = termination, improve = improve)
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem.cache_hits} over {problem.total_calls}")
     optimizer.archive.write_json(f"{prob}_final_archive.json5")
