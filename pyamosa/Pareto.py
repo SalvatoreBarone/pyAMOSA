@@ -108,7 +108,7 @@ class Pareto:
     def write_json(self, json_file : str):
         try:
             with open(json_file, 'w') as outfile:
-                json5.dumps(self.candidate_solutions, outfile)
+                json5.dump(self.candidate_solutions, outfile)
         except TypeError as e:
             print(self.candidate_solutions)
             print(e)

@@ -36,28 +36,28 @@ class StochasticHillClimbing:
             self.save_checkpoint()
 
     def climb(self, candidate, max_iterations):
-        direction = None
-        heading = None
-        step_size = None
+        direction, heading = self.stochastic_steep()
+        step_size = self.min_step(direction)
         for _ in trange(max_iterations, desc = "Climbing...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
-            if direction is None and heading is None:
-                direction = random.randrange(0, self.problem.num_of_variables)
-                heading = 1 if random.random() > 0.5 else -1
-                step_size = self.min_step(direction)
             new_candidate = copy.deepcopy(candidate)
             new_candidate["x"][direction] =  StochasticHillClimbing.clip(new_candidate["x"][direction] + (step_size * heading), self.problem.lower_bound[direction], self.problem.upper_bound[direction] - self.min_step(direction))
             assert self.problem.lower_bound[direction] <= new_candidate["x"][direction] < self.problem.upper_bound[direction], f"Variable {direction} with value {new_candidate['x'][direction]} is out of bound for [{self.problem.lower_bound[direction]}, {self.problem.upper_bound[direction]}]"
             self.problem.get_objectives(new_candidate)
-            if Pareto.dominates(new_candidate, candidate) or (not Pareto.dominates(new_candidate, candidate) and not Pareto.dominates(candidate, new_candidate)):
+            if Pareto.dominates(new_candidate, candidate) or (not Pareto.dominates(new_candidate, candidate) and not Pareto.dominates(candidate, new_candidate) and Pareto.not_the_same(candidate, new_candidate)):
                 candidate = new_candidate
                 step_size = StochasticHillClimbing.clip(step_size * 2, self.min_step(direction), self.problem.upper_bound[direction] - self.min_step(direction) - new_candidate["x"][direction] if heading == 1 else new_candidate["x"][direction] - self.problem.lower_bound[direction])
             else:
-                direction = None
-                heading = None
+                direction, heading = self.stochastic_steep()
+                step_size = self.min_step(direction)
         self.pareto.candidate_solutions.append(candidate)
 
     def min_step(self, direction):
         return 1 if self.problem.types[direction] == Type.INTEGER else (5 * np.finfo(float).eps)
+    
+    def stochastic_steep(self):
+        direction = random.randrange(0, self.problem.num_of_variables)
+        heading = 1 if random.random() > 0.5 else -1
+        return direction, heading
     
     @staticmethod
     def clip(x, xmin, xmax):
