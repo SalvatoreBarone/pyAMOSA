@@ -17,11 +17,10 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import pyamosa, numpy as np
 
 
-class ZDT6(pyamosa.Problem):
-    n_var = 10
+class GenZDT6(pyamosa.Problem):
 
-    def __init__(self):
-        pyamosa.Problem.__init__(self, ZDT6.n_var, [pyamosa.Type.REAL] * ZDT6.n_var, [0.0] * ZDT6.n_var, [1.0] * ZDT6.n_var, 2, 0)
+    def __init__(self, n_var : int = 10):
+        pyamosa.Problem.__init__(self, n_var, [pyamosa.Type.REAL] * n_var, [0.0] * n_var, [1.0] * n_var, 2, 0)
 
     def evaluate(self, x, out):
         f = 1 - np.exp(-4 * x[0]) * np.power(np.sin(6 * np.pi * x[0]), 6)
@@ -36,7 +35,7 @@ class ZDT6(pyamosa.Problem):
         """
         pareto_set = np.linspace(0, 1, 100)
         out =   [
-                    {   "x": [x] + [0] * (ZDT6.n_var-1),
+                    {   "x": [x] + [0] * (self.n_var-1),
                         "f": [0] * self.num_of_objectives,
                         "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
                     } for x in pareto_set

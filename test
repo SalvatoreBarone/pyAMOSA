@@ -1,6 +1,6 @@
 #!python3
 """
-Copyright 2021-2022 Salvatore Barone <salvatore.barone@unina.it>
+Copyright 2021-2023 Salvatore Barone <salvatore.barone@unina.it>
 
 This is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free
@@ -26,8 +26,12 @@ from problems.ZDT4 import *
 from problems.ZDT6 import *
 from problems.metrics import *
 
+from problems.GenZDT1 import *
+from problems.GenZDT2 import *
+from problems.GenZDT4 import *
+from problems.GenZDT6 import *
 
-problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
+mop_problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
 
 
 @click.group()
@@ -35,10 +39,10 @@ def cli():
     pass
 
 
-@cli.command('evaluate')
-@click.argument('prob', type = click.Choice(list(problems.keys())), required = True)
-def evaluate(prob):
-    problem = problems[prob]
+@cli.command('mopeval')
+@click.argument('prob', type = click.Choice(list(mop_problems.keys())), required = True)
+def mopeval(prob):
+    problem = mop_problems[prob]
     opt = problem.optimums()
     archive = json5.load(open(f"{prob}_final_archive.json5"))
     real_pareto = np.array([s["f"] for s in opt])
@@ -55,8 +59,8 @@ def evaluate(prob):
     print(f"dispersion: {dispersion(real_pareto, est_pareto)}")
 
 
-@cli.command('run')
-@click.argument('prob', type = click.Choice(list(problems.keys())), required = True)
+@cli.command('mop')
+@click.argument('prob', type = click.Choice(list(mop_problems.keys())), required = True)
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
@@ -70,9 +74,9 @@ def evaluate(prob):
 @click.option('--improve', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
 @click.option('--maxtime', type = str, required = False, default = None, help = 'Max duration (hh:mm:ss)')
-def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, improve, attempts, maxtime):
+def runmop(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, improve, attempts, maxtime):
     """ Run a test problem """
-    problem = problems[prob]
+    problem = mop_problems[prob]
     config = pyamosa.Config
     config.archive_hard_limit = hard
     config.archive_soft_limit = soft
@@ -99,11 +103,8 @@ def run(prob, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, imp
     optimizer.archive.write_json(f"{prob}_final_archive.json5")
     optimizer.archive.plot_front(problem.num_of_objectives, f"{prob}_pareto_front.pdf")
 
-
-
-cli.add_command(evaluate)
-cli.add_command(run)
-
+cli.add_command(mopeval)
+cli.add_command(runmop)
 
 if __name__ == '__main__':
     cli()
