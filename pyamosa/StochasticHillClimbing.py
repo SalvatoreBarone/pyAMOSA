@@ -31,14 +31,14 @@ class StochasticHillClimbing:
         self.pareto.candidate_solutions = [ self.problem.lower_point(), self.problem.upper_point() ]
         
     def run(self, max_num_of_candidates, max_iterations):
-        for _ in trange(len(self.pareto.candidate_solutions), max_num_of_candidates, desc = "Hill climbing", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
+        for _ in trange(len(self.pareto.candidate_solutions), max_num_of_candidates, desc = "Generating initial candidates...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             self.climb(self.problem.random_point(), max_iterations)
             self.save_checkpoint()
 
     def climb(self, candidate, max_iterations):
         direction, heading = self.stochastic_steep()
         step_size = self.min_step(direction)
-        for _ in trange(max_iterations, desc = "Climbing...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
+        for _ in trange(max_iterations, desc = "Hill climbing...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             new_candidate = copy.deepcopy(candidate)
             new_candidate["x"][direction] =  StochasticHillClimbing.clip(new_candidate["x"][direction] + (step_size * heading), self.problem.lower_bound[direction], self.problem.upper_bound[direction] - self.min_step(direction))
             assert self.problem.lower_bound[direction] <= new_candidate["x"][direction] < self.problem.upper_bound[direction], f"Variable {direction} with value {new_candidate['x'][direction]} is out of bound for [{self.problem.lower_bound[direction]}, {self.problem.upper_bound[direction]}]"

@@ -25,71 +25,16 @@ from .StopCriterion import StopCriterion
 from .StopMinTemperature import StopMinTemperature
 from .CombinedStopCriterion import CombinedStopCriterion
 class Optimizer:
-    checkpoint_file = "minimize_checkpoint.json5"
-    
-
     def __init__(self, config : Config):
         warnings.filterwarnings("error")
         self.config = config
-
         self.current_temperature = 0
-        self.archive = Pareto()
+        self.archive = None
         self.duration = 0
         self.n_eval = 0
 
-
     def run(self, problem : Problem, termination_criterion : StopCriterion = StopMinTemperature(1e-10), improve : str = None, remove_checkpoints : bool = True):
-        print(f"Reading cache from {self.config.cache_dir}. This may take a while...")
-        problem.load_cache(self.config.cache_dir)
-        print(f"Read {len(problem.cache)} entries.")
-        self.current_temperature = self.config.initial_temperature
-        # self.temperature = Optimizer.matter_temperatures(self.config.initial_temperature, self.final_temperature, self.config.cooling_factor)
-
-        assert self.config.annealing_strength <= problem.num_of_variables, f"Too much strength ({self.config.annealing_strength}) for this problem! It has only {problem.num_of_variables} variables!"
-        self.archive = Pareto()
-        self.duration = 0
-        
-        self.duration = time.time()
-        if os.path.exists(self.config.minimize_checkpoint_file):
-            print(f"Recovering Annealing from {self.config.minimize_checkpoint_file}")
-            self.read_checkpoint(problem)
-            problem.archive_to_cache(self.archive)
-        elif improve is not None:
-            print(f"Reading {improve}, and trying to improve a previous run...")
-            self.archive.read_json(problem.types, improve)
-            problem.archive_to_cache(self.archive)
-            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
-            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
-            problem.archive_to_cache(self.archive)
-            if self.archive.size() > self.config.archive_hard_limit:
-                self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-            self.save_checkpoint()
-            
-        elif os.path.exists(self.config.hill_climb_checkpoint_file):
-            print(f"Recovering Hill-climbing from {self.config.hill_climb_checkpoint_file}")
-            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
-            climber.read_checkpoint()
-            print(f"Recovered {self.archive.size()} candidate solutions")
-            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
-            problem.archive_to_cache(self.archive)
-            if self.archive.size() > self.config.archive_hard_limit:
-                self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-            self.save_checkpoint()
-            if remove_checkpoints:
-                os.remove(self.config.hill_climb_checkpoint_file)
-                
-        else:
-            climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
-            climber.init()
-            climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
-            problem.archive_to_cache(self.archive)
-            if self.archive.size() > self.config.archive_hard_limit:
-                self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-            self.save_checkpoint()
-            if remove_checkpoints:
-                os.remove(self.config.hill_climb_checkpoint_file)
-        assert self.archive.size() > 0, "Archive not initialized"
-        
+        self.bootstrap(problem, improve, remove_checkpoints)
         self.main_loop(problem, termination_criterion)
         self.archive.remove_infeasible(problem.num_of_constraints)
         self.archive.remove_dominated()
@@ -101,7 +46,48 @@ class Optimizer:
         if remove_checkpoints:
             os.remove(self.config.minimize_checkpoint_file)
 
+    def bootstrap(self, problem, improve, remove_checkpoints):
+        print(f"Reading cache from {self.config.cache_dir}. This may take a while...")
+        problem.load_cache(self.config.cache_dir)
+        print(f"Read {len(problem.cache)} entries.")
+        self.current_temperature = self.config.initial_temperature
+        assert self.config.annealing_strength <= problem.num_of_variables, f"Too much strength ({self.config.annealing_strength}) for this problem! It has only {problem.num_of_variables} variables!"
+        self.archive = Pareto()
+        self.duration = 0
+        self.duration = time.time()
+        climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
+        if os.path.exists(self.config.minimize_checkpoint_file):
+            print(f"Recovering Annealing from {self.config.minimize_checkpoint_file}")
+            self.read_checkpoint(problem)
+            problem.archive_to_cache(self.archive)
+        elif improve is not None:
+            print(f"Reading {improve}, and trying to improve a previous run...")
+            self.archive.read_json(problem.types, improve)
+            problem.archive_to_cache(self.archive)
+            self.run_hill_climbing(climber, problem)
+        elif os.path.exists(self.config.hill_climb_checkpoint_file):
+            print(f"Recovering Hill-climbing from {self.config.hill_climb_checkpoint_file}")
+            climber.read_checkpoint()
+            print(f"Recovered {self.archive.size()} candidate solutions")
+            self.run_hill_climbing(climber, problem)
+            if remove_checkpoints:
+                os.remove(self.config.hill_climb_checkpoint_file)
+        else:
+            climber.init()
+            self.run_hill_climbing(climber, problem)
+            if remove_checkpoints:
+                os.remove(self.config.hill_climb_checkpoint_file)
+        assert self.archive.size() > 0, "Archive not initialized"
+
+    def run_hill_climbing(self, climber, problem):
+        climber.run(self.config.archive_soft_limit * self.config.archive_gamma, self.config.hill_climbing_iterations)
+        problem.archive_to_cache(self.archive)
+        if self.archive.size() > self.config.archive_hard_limit:
+            self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
+        self.save_checkpoint()
+
     def main_loop(self, problem : Problem, termination_criterion : StopCriterion):
+        assert self.archive.size() > 0, "Archive not initialized"
         tot_iterations = self.tot_iterations(termination_criterion)
         self.print_header(problem)
         self.print_statistics(problem)
@@ -109,7 +95,7 @@ class Optimizer:
         pbar = tqdm(total = tot_iterations, desc = "Main loop: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
         while not termination_criterion.check_termination(self):
             self.current_temperature *= self.config.cooling_factor
-            self.annealing(problem, current_point)
+            self.annealing_loop(problem, current_point)
             self.n_eval += self.config.annealing_iterations
             self.print_statistics(problem)
             if self.archive.size() > self.config.archive_soft_limit:
@@ -129,8 +115,8 @@ class Optimizer:
         return int(np.ceil(np.log(min_temperature/self.current_temperature) / np.log(self.config.cooling_factor)))
 
     
-    def annealing(self, problem, current_point):
-        for _ in trange(self.config.annealing_iterations, desc = "Annealing", file=sys.stdout, leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
+    def annealing_loop(self, problem, current_point):
+        for _ in trange(self.config.annealing_iterations, desc = "Annealing...", file=sys.stdout, leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             new_point = self.random_perturbation(problem, current_point, self.config.annealing_strength)
             fitness_range = self.archive.compute_fitness_range([current_point, new_point])
             s_dominating_y = self.archive.dominating(new_point)
