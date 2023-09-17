@@ -24,6 +24,7 @@ class Pareto:
         self.candidate_solutions = []
         self.ideal = None
         self.nadir = None
+        self.C_actual_prev = None
         self.old_norm_objectives = []
         self.phy = []
         
@@ -53,10 +54,23 @@ class Pareto:
             return all(i <= j for i, j in zip(x["f"], y["f"])) and any(i < j for i, j in zip(x["f"], y["f"]))
         else:
             return Pareto.x_is_feasible_while_y_is_nor(x, y) or Pareto.both_infeasible_but_x_is_better(x, y) or Pareto.both_feasible_but_x_is_better(x, y)
-        
+
     @staticmethod
-    def inverted_generational_distance(p_t, p_tau):
-        return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in p_t[:]]) for p in p_tau[:]]) / len(p_tau)
+    def coverage(A, B):
+        if len(B) == 0 or len(A) == 0:
+            return 0
+        assert A.shape[1] == B.shape[1]
+        count = 0
+        for b in B:
+            for a in A:
+                if all(i <= j for i, j in zip(a, b)) and any(i < j for i, j  in zip(a, b)):
+                    count += 1 
+                    break
+        return count / B.shape[0]
+
+    @staticmethod
+    def inverted_generational_distance(reference, evolved):
+        return np.nansum([np.nanmin([np.linalg.norm(p - q) for q in reference[:]]) for p in evolved[:]]) / len(evolved)
         
     @staticmethod
     def centroid_of_set(input_set):
@@ -130,7 +144,7 @@ class Pareto:
     def from_checkpoint(self, checkpoint, types):
         self.ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
         self.nadir = [float(i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
-        self.old_norm_objectives = checkpoint["norm"]
+        self.old_norm_objectives = np.array(checkpoint["norm"])
         self.phy = [float(i) for i in checkpoint["phy"]]
         self.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]   
         
@@ -170,14 +184,15 @@ class Pareto:
     def clustering(self, num_of_constraints, max_points, max_iterations):
         if num_of_constraints == 0:
             self.candidate_solutions = Pareto.kmeans_clustering(self.candidate_solutions, max_points, max_iterations)
-        feasible = [s for s in self.candidate_solutions if all(g <= 0 for g in s["g"])]
-        unfeasible = [s for s in self.candidate_solutions if any(g > 0 for g in s["g"])]
-        if len(feasible) > max_points:
-            self.candidate_solutions = Pareto.kmeans_clustering(feasible, max_points, max_iterations)
-        elif len(feasible) < max_points and len(unfeasible) != 0:
-            self.candidate_solutions = feasible + Pareto.kmeans_clustering(unfeasible, max_points - len(feasible), max_iterations)
         else:
-            self.candidate_solutions = feasible
+            feasible = [s for s in self.candidate_solutions if all(g <= 0 for g in s["g"])]
+            unfeasible = [s for s in self.candidate_solutions if any(g > 0 for g in s["g"])]
+            if len(feasible) > max_points:
+                self.candidate_solutions = Pareto.kmeans_clustering(feasible, max_points, max_iterations)
+            elif len(feasible) < max_points and len(unfeasible) != 0:
+                self.candidate_solutions = feasible + Pareto.kmeans_clustering(unfeasible, max_points - len(feasible), max_iterations)
+            else:
+                self.candidate_solutions = feasible
     
     def remove_infeasible(self, num_of_constraints):
         if num_of_constraints > 0:
@@ -215,23 +230,27 @@ class Pareto:
         objectives = np.array([s["f"] for s in self.candidate_solutions])
         nadir = np.nanmax(objectives, axis = 0)
         ideal = np.nanmin(objectives, axis = 0)
+        C_actual_prev = 0
         normalized_objectives = np.array([])
         try:
             normalized_objectives = np.array([[(p - i) / (n - i) for p, i, n in zip(x, ideal, nadir)] for x in objectives[:]])
-            retvalue = (0, 0, 0)
+            retvalue = (0, 0, 0, 0, 0)
             if self.nadir is not None and self.ideal is not None and self.old_norm_objectives is not None and len(self.old_norm_objectives) != 0:
                 delta_nad = np.nanmax([(nad_t_1 - nad_t) / (nad_t_1 - id_t) for nad_t_1, nad_t, id_t in zip(self.nadir, nadir, ideal)])
                 delta_ideal = np.nanmax([(id_t_1 - id_t) / (nad_t_1 - id_t) for id_t_1, id_t, nad_t_1 in zip(self.ideal, ideal, self.nadir)])
                 phy = Pareto.inverted_generational_distance(self.old_norm_objectives, normalized_objectives)
                 self.phy.append(phy)
-                retvalue = (delta_nad, delta_ideal, phy)
+                C_prev_actual = Pareto.coverage(self.old_norm_objectives, normalized_objectives)
+                C_actual_prev = Pareto.coverage(normalized_objectives, self.old_norm_objectives)
+                retvalue = (delta_nad, delta_ideal, phy, C_prev_actual, C_actual_prev)
             self.nadir = nadir
             self.ideal = ideal
+            self.C_actual_prev = C_actual_prev
             self.old_norm_objectives = normalized_objectives
             return retvalue
         except (RuntimeWarning, RuntimeError, FloatingPointError) as e:
             self.phy.append(0)
-            return (0, 0, 0)
+            return (0, 0, 0, 0, 0)
     
     def plot_front(self, num_of_objectives : int, pdf_file : str, fig_title : str = "Pareto front", axis_labels : list = None, color = "k", marker = "."):
         def draw_proj(axis, data_x, data_y, data_z, color, ranges = [0.1, 0.1, 0.1]):

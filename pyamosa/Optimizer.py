@@ -35,12 +35,12 @@ class Optimizer:
 
     def run(self, problem : Problem, termination_criterion : StopCriterion = StopMinTemperature(1e-10), improve : str = None, remove_checkpoints : bool = True):
         self.bootstrap(problem, improve, remove_checkpoints)
-        self.main_loop(problem, termination_criterion)
+        self.annealing_loop(problem, termination_criterion)
         self.archive.remove_infeasible(problem.num_of_constraints)
         self.archive.remove_dominated()
         if self.archive.size() > self.config.archive_hard_limit:
             self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-        self.print_statistics(problem)
+        self.print_statistics(problem.num_of_constraints)
         self.duration = time.time() - self.duration
         problem.store_cache(self.config.cache_dir)
         if remove_checkpoints:
@@ -86,25 +86,25 @@ class Optimizer:
             self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
         self.save_checkpoint()
 
-    def main_loop(self, problem : Problem, termination_criterion : StopCriterion):
+    def annealing_loop(self, problem : Problem, termination_criterion : StopCriterion):
         assert self.archive.size() > 0, "Archive not initialized"
         tot_iterations = self.tot_iterations(termination_criterion)
-        self.print_header(problem)
-        self.print_statistics(problem)
+        self.print_header(problem.num_of_constraints)
+        self.print_statistics(problem.num_of_constraints)
         current_point = self.archive.random_point()
-        pbar = tqdm(total = tot_iterations, desc = "Main loop: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
+        pbar = tqdm(total = tot_iterations, desc = "Cooling the matter: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
         while not termination_criterion.check_termination(self):
             self.current_temperature *= self.config.cooling_factor
-            self.annealing_loop(problem, current_point)
+            self.annealing(problem, current_point)
             self.n_eval += self.config.annealing_iterations
-            self.print_statistics(problem)
+            self.print_statistics(problem.num_of_constraints)
             if self.archive.size() > self.config.archive_soft_limit:
                 self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-                self.print_statistics(problem)
+                self.print_statistics(problem.num_of_constraints)
             self.save_checkpoint()
             problem.store_cache(self.config.cache_dir)
             pbar.update(1)
-        print("Termination criterion has been met.")
+        tqdm.write("\nTermination criterion has been met.")
 
     def tot_iterations(self, termination_criterion : StopCriterion):
         min_temperature = 1e-10
@@ -115,7 +115,7 @@ class Optimizer:
         return int(np.ceil(np.log(min_temperature/self.current_temperature) / np.log(self.config.cooling_factor)))
 
     
-    def annealing_loop(self, problem, current_point):
+    def annealing(self, problem, current_point):
         for _ in trange(self.config.annealing_iterations, desc = "Annealing...", file=sys.stdout, leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             new_point = self.random_perturbation(problem, current_point, self.config.annealing_strength)
             fitness_range = self.archive.compute_fitness_range([current_point, new_point])
@@ -141,7 +141,7 @@ class Optimizer:
                 if k_s_dominating_y >= 1:
                     delta_dom = [Optimizer.domination_amount(s, new_point, fitness_range) for s in s_dominating_y]
                     if Optimizer.accept(Optimizer.sigmoid(min(delta_dom))):
-                        current_point = self.archive[np.argmin(delta_dom)]
+                        current_point = self.archive.candidate_solutions[np.argmin(delta_dom)]
                 elif (k_s_dominating_y == 0 and k_s_dominated_by_y == 0) or k_s_dominated_by_y >= 1:
                     self.archive.add(new_point)
                     current_point = new_point
@@ -149,23 +149,23 @@ class Optimizer:
                         self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
 
 
-    def print_header(self, problem):
-        if problem.num_of_constraints == 0:
-            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
-            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi"))
-            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10))
+    def print_header(self, num_of_constraints):
+        if num_of_constraints == 0:
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi", "C(P', P)", "C(P, P')"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
         else:
-            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
-            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi"))
-            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi", "C(P', P)", "C(P, P')"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10))
 
     def print_statistics(self, num_of_constraints):
-        delta_nad, delta_ideal, phy = self.archive.compute_deltas()
+        delta_nad, delta_ideal, phy, C_prev_actual, C_actual_prev = self.archive.compute_deltas()
         if num_of_constraints == 0:
-            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.current_temperature, self.n_eval, self.archive.size(), delta_ideal, delta_nad, phy))
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.current_temperature, self.n_eval, self.archive.size(), delta_ideal, delta_nad, phy, C_prev_actual, C_actual_prev))
         else:
             feasible, cv_min, cv_avg = self.archive.get_min_agv_cv()
-            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.current_temperature, self.n_eval, self.archive.size(), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy))
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} |".format(self.current_temperature, self.n_eval, self.archive.size(), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy, C_prev_actual, C_actual_prev))
 
     def save_checkpoint(self):
         checkpoint = {"n_eval": self.n_eval, "t": self.current_temperature} | self.archive.get_checkpoint()

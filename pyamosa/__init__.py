@@ -18,6 +18,7 @@ from .DataType import Type
 from .Problem import Problem
 from .Config import Config
 from .Optimizer import Optimizer 
+from .DynamicRandomGroupingOptimizer import DynamicRandomGroupingOptimizer
 from .StopCriterion import StopCriterion
 from .StopMaxTime import StopMaxTime
 from .StopMinTemperature import StopMinTemperature

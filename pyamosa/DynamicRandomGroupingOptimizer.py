@@ -35,44 +35,65 @@ For further insights, please refer to
 class DynamicRandomGroupingOptimizer(Optimizer):
     def __init__(self, config: Config):
         super().__init__(config)
+        self.pool_size = 0
         self.group_size_pool = []
         self.group_size_score = []
-        self.group_size = 0
-        self.variable_subset = []
+        self.current_group_index = 0
+        self.current_variable_mask = []
 
-    def main_loop(self, problem : Problem, termination_criterion : StopCriterion):
+    def annealing_loop(self, problem : Problem, termination_criterion : StopCriterion):
         assert self.archive.size() > 0, "Archive not initialized"
         tot_iterations = self.tot_iterations(termination_criterion)
-        self.print_header(problem)
-        self.print_statistics(problem)
+        print("Initializing Dynamic Random Grouping")
+        self.init_variable_grouping(problem, tot_iterations)
+        self.print_header(problem.num_of_constraints)
+        self.print_statistics(problem.num_of_constraints)
         current_point = self.archive.random_point()
-        pbar = tqdm(total = tot_iterations, desc = "Cooling the matter...", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
+        pbar = tqdm(total = tot_iterations, desc = "Cooling the matter: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
         while not termination_criterion.check_termination(self):
             self.current_temperature *= self.config.cooling_factor
-            # TODO define which subset of variables has to be altered and its size
-            self.annealing_loop(problem, current_point)
+            self.random_variable_grouping(problem.num_of_variables)
+            self.annealing(problem, current_point)
+            self.update_group_score()
             self.n_eval += self.config.annealing_iterations
-            self.print_statistics(problem)
+            self.print_statistics(problem.num_of_constraints)
             if self.archive.size() > self.config.archive_soft_limit:
                 self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
-                self.print_statistics(problem)
+                self.print_statistics(problem.num_of_constraints)
             self.save_checkpoint()
             problem.store_cache(self.config.cache_dir)
             pbar.update(1)
         print("Termination criterion has been met.")
 
-    def random_variable_grouping(self):
-        # TODO define which subset of variables has to be altered and its size
-        pass
+    @staticmethod
+    def softmax(x):
+        e_x = np.exp(np.array(x, dtype = np.float64))
+        return e_x / e_x.sum()
+    
+    def init_variable_grouping(self, problem, tot_iterations):
+        self.pool_size = min(int(0.6 * tot_iterations), 15)
+        self.group_size_pool = np.geomspace(5*int(np.log10(problem.num_of_variables)), problem.num_of_variables, num = self.pool_size, endpoint = True, dtype = int).tolist()
+        self.group_size_score = np.ones(self.pool_size)
+        self.current_group_index = self.pool_size - 1
+        self.current_variable_mask = [1] * self.pool_size
+        print(f"Pool: {self.group_size_pool} (size: {self.pool_size})")
+
+    def random_variable_grouping(self, num_of_variables):
+        self.current_group_index = random.choices(list(range(self.pool_size)), weights = DynamicRandomGroupingOptimizer.softmax(self.group_size_score), k=1)[0]
+        self.current_variable_mask = [0] * (num_of_variables - self.group_size_pool[self.current_group_index]) + [1] * self.group_size_pool[self.current_group_index]
+        random.shuffle(self.current_variable_mask)
+        #print(f"Current index: {self.current_group_index}, current size: {self.group_size_pool[self.current_group_index]}, current mask: {self.current_variable_mask}")
+        assert np.sum(self.current_variable_mask) == self.group_size_pool[self.current_group_index], f"{np.sum(self.current_variable_mask)} differs from {self.group_size_pool[self.current_group_index]}"
+
+    def update_group_score(self):
+        self.group_size_score[self.current_group_index] = self.archive.C_actual_prev
 
     def random_perturbation(self, problem, s, strength):
         z = copy.deepcopy(s)
-        # while z["x"] is in the cache, repeat the random perturbation a safety-exit prevents infinite loop, using a counter variable
         safety_exit = problem.max_attempt
         while safety_exit >= 0 and problem.is_cached(z):
             safety_exit -= 1
-            # TODO select indexes only from the list of allowed indexes
-            indexes = random.sample(range(problem.num_of_variables), random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            indexes = random.choices(list(range(problem.num_of_variables)), weights = self.current_variable_mask, k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
             for i in indexes:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]
@@ -84,3 +105,21 @@ class DynamicRandomGroupingOptimizer(Optimizer):
                     z["x"][i] = random.randrange(lb, ub) if tp == Type.INTEGER else random.uniform(lb, ub)
         problem.get_objectives(z)
         return z
+    
+    def print_header(self, num_of_constraints):
+        if num_of_constraints == 0:
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 6))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>6} |".format("temp.", "# eval", " # nds", "D*", "Dnad", "phi", "C(P', P)", "C(P, P')", "S"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 6))
+        else:
+            tqdm.write("\n  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 6))
+            tqdm.write("  | {:>12} | {:>10} | {:>6} | {:>6} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>10} | {:>6} |".format("temp.", "# eval", "# nds", "# feas", "cv min", "cv avg", "D*", "Dnad", "phi", "C(P', P)", "C(P, P')", "S"))
+            tqdm.write("  +-{:>12}-+-{:>10}-+-{:>6}-+-{:>6}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>10}-+-{:>6}-+".format("-" * 12, "-" * 10, "-" * 6, "-" * 6, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 10, "-" * 6))
+
+    def print_statistics(self, num_of_constraints):
+        delta_nad, delta_ideal, phy, C_prev_actual, C_actual_prev = self.archive.compute_deltas()
+        if num_of_constraints == 0:
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>6} |".format(self.current_temperature, self.n_eval, self.archive.size(), delta_ideal, delta_nad, phy, C_prev_actual, C_actual_prev, self.group_size_pool[self.current_group_index]))
+        else:
+            feasible, cv_min, cv_avg = self.archive.get_min_agv_cv()
+            tqdm.write("  | {:>12.2e} | {:>10.2e} | {:>6} | {:>6} | {:>10.2e} | {:>10.2e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>10.3e} | {:>6} |".format(self.current_temperature, self.n_eval, self.archive.size(), feasible, cv_min, cv_avg, delta_ideal, delta_nad, phy, C_prev_actual, C_actual_prev, self.group_size_pool[self.current_group_index]))
