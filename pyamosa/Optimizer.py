@@ -34,7 +34,8 @@ class Optimizer:
         self.n_eval = 0
 
     def run(self, problem : Problem, termination_criterion : StopCriterion = StopMinTemperature(1e-10), improve : str = None, remove_checkpoints : bool = True):
-        self.bootstrap(problem, improve, remove_checkpoints)
+        self.bootstrap(problem)
+        self.initial_stage(problem, improve, remove_checkpoints)
         self.annealing_loop(problem, termination_criterion)
         self.archive.remove_infeasible(problem.num_of_constraints)
         self.archive.remove_dominated()
@@ -46,7 +47,7 @@ class Optimizer:
         if remove_checkpoints:
             os.remove(self.config.minimize_checkpoint_file)
 
-    def bootstrap(self, problem, improve, remove_checkpoints):
+    def bootstrap(self, problem):
         print(f"Reading cache from {self.config.cache_dir}. This may take a while...")
         problem.load_cache(self.config.cache_dir)
         print(f"Read {len(problem.cache)} entries.")
@@ -55,6 +56,8 @@ class Optimizer:
         self.archive = Pareto()
         self.duration = 0
         self.duration = time.time()
+
+    def initial_stage(self, problem, improve, remove_checkpoints):
         climber = StochasticHillClimbing(problem, self.archive, self.config.hill_climb_checkpoint_file)
         if os.path.exists(self.config.minimize_checkpoint_file):
             print(f"Recovering Annealing from {self.config.minimize_checkpoint_file}")
@@ -184,6 +187,11 @@ class Optimizer:
         self.current_temperature = float(checkpoint["t"])
         self.archive.from_checkpoint(checkpoint, problem.types)
         
+    @staticmethod
+    def softmax(x):
+        e_x = np.exp(np.array(x, dtype = np.float64))
+        return e_x / e_x.sum()
+    
     @staticmethod
     def accept(probability):
         return random.random() < probability

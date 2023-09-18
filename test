@@ -34,7 +34,6 @@ from problems.GenZDT6 import *
 
 mop_problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
 lsmop_problems = {"ZDT1": GenZDT1, "ZDT2": GenZDT2, "ZDT4": GenZDT4, "ZDT6": GenZDT6}
-lsmop_heuristics = {"DRG": pyamosa.DynamicRandomGroupingOptimizer}
 
 @click.group()
 def cli():
@@ -108,7 +107,7 @@ def runmop(problem, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, wi
 @cli.command('lsmop')
 @click.argument('problem', type = click.Choice(list(lsmop_problems.keys())), required = True)
 @click.argument('nvar', type = int, required = True)
-@click.argument('heuristic', type = click.Choice(list(lsmop_heuristics.keys())), required = True)
+@click.argument('heuristic', type = click.Choice(["DRG", "DVG"]), required = True)
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
@@ -138,7 +137,10 @@ def runlsmop(problem, nvar, heuristic, hard, soft, gamma, climb, itemp, ftemp, c
     config.hill_climb_checkpoint_file = f"{problem}_{nvar}_{heuristic}_hill_climbing_checkpoint.json5"
     config.minimize_checkpoint_file = f"{problem}_{nvar}_{heuristic}_minimize_checkpoint.json5"
     config.cache_dir = f".{problem}_{nvar}_cache"
-    optimizer = lsmop_heuristics[heuristic](config)
+    if heuristic == "DRG":
+        optimizer = pyamosa.DynamicRandomGroupingOptimizer(config)
+    elif heuristic == "DVG":
+        optimizer = pyamosa.GenericGroupingOptimizer(config, pyamosa.DifferentialVariableGrouping(problem_instance))
     if attempts != 0:
         problem_instance.max_attempt = attempts
     termination = pyamosa.CombinedStopCriterion(maxtime, ftemp, win)
