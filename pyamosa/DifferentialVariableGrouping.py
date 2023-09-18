@@ -23,10 +23,11 @@ class DifferentialVariableGrouping(VariableGrouping):
     def __init__(self, problem : Problem, cache : str = "differential_grouping_cache.json5"):
         super().__init__(problem, cache)
 
-    def run(self, problem_cache : str, eps : float = 10 * np.finfo(float).eps):
+    def run(self, problem_cache : str, eps : float = 1e-7):
         lower_point = self.problem.lower_point()
         interacting_variables = {}
         separable_variables = []
+        #diff_deltas = np.zeros((self.problem.num_of_variables, self.problem.num_of_variables, self.problem.num_of_objectives))
         for i in trange(self.problem.num_of_variables,  desc = "Checking epistasis: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             if all(i not in g for g in interacting_variables.values()): # check whether i has been already grouped
                 x = copy.deepcopy(lower_point)
@@ -42,6 +43,7 @@ class DifferentialVariableGrouping(VariableGrouping):
                         z["x"][j] = y["x"][j]
                         self.problem.get_objectives(z)
                         delta_ub = np.array(z["f"]) - np.array(y["f"])
+                        #diff_deltas[i][j] = np.abs(delta_lb - delta_ub)
                         if any(np.abs(delta_lb - delta_ub) > eps):
                             if i in interacting_variables:
                                 interacting_variables[i].append(j)
@@ -52,6 +54,7 @@ class DifferentialVariableGrouping(VariableGrouping):
         self.problem.store_cache(problem_cache)
         interacting_variables = [ [k] + v for k, v in interacting_variables.items() ] 
         self.variable_groups = interacting_variables + [separable_variables] if separable_variables else interacting_variables
+        #print(diff_deltas)
         
 
 

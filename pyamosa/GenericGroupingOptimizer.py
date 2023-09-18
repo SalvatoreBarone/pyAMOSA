@@ -104,8 +104,8 @@ class GenericGroupingOptimizer(Optimizer):
 
     def select_group(self, n_vars):
         self.current_group_index = random.choices(list(range(self.pool_size)), weights = Optimizer.softmax(7 * self.groups_score), k=1)[0]
-        self.current_variable_mask = tuple( i in self.groups_pool[self.current_group_index] for i in range(n_vars) )
-        print(f"Current index: {self.current_group_index}, current mask: {self.current_variable_mask}")
+        self.current_variable_mask = tuple(1.0 if i in self.groups_pool[self.current_group_index] else 0.0 for i in range(n_vars) )
+        #print(f"Current index: {self.current_group_index}, current mask: {self.current_variable_mask}")
 
     def update_group_score(self):
         self.groups_score[self.current_group_index] = self.archive.C_actual_prev
@@ -115,9 +115,8 @@ class GenericGroupingOptimizer(Optimizer):
         safety_exit = problem.max_attempt
         while safety_exit >= 0 and problem.is_cached(z):
             safety_exit -= 1
-            indexes = random.choices(list(range(problem.num_of_variables)), weights = self.current_variable_mask, k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
-            assert all( i not in indexes for i in np.where(self.current_variable_mask == 0).to_list()), "A variable was selected that should not be changed"
-            for i in indexes:
+            selected_indexes = random.choices(list(range(problem.num_of_variables)), weights = self.current_variable_mask, k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            for i in selected_indexes:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]
                 tp = problem.types[i]

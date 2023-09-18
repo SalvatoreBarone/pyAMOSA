@@ -94,7 +94,6 @@ class DynamicRandomGroupingOptimizer(Optimizer):
         while safety_exit >= 0 and problem.is_cached(z):
             safety_exit -= 1
             indexes = random.choices(list(range(problem.num_of_variables)), weights = self.current_variable_mask, k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
-            assert all( i not in indexes for i in np.where(self.current_variable_mask == 0).to_list()), "A variable was selected that should not be changed"
             for i in indexes:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]
