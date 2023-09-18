@@ -72,14 +72,14 @@ class DynamicRandomGroupingOptimizer(Optimizer):
     
     def init_variable_grouping(self, problem, tot_iterations):
         self.pool_size = min(int(0.6 * tot_iterations), 15)
-        self.group_size_pool = np.geomspace(5*int(np.log10(problem.num_of_variables)), problem.num_of_variables, num = self.pool_size, endpoint = True, dtype = int).tolist()
+        self.group_size_pool = np.geomspace(5*int(np.log10(problem.num_of_variables)), problem.num_of_variables // 2, num = self.pool_size, endpoint = True, dtype = int).tolist()
         self.group_size_score = np.ones(self.pool_size)
         self.current_group_index = self.pool_size - 1
         self.current_variable_mask = [1] * self.pool_size
         print(f"Pool: {self.group_size_pool} (size: {self.pool_size})")
 
     def random_variable_grouping(self, num_of_variables):
-        self.current_group_index = random.choices(list(range(self.pool_size)), weights = DynamicRandomGroupingOptimizer.softmax(self.group_size_score), k=1)[0]
+        self.current_group_index = random.choices(list(range(self.pool_size)), weights = DynamicRandomGroupingOptimizer.softmax(7 * self.group_size_score), k=1)[0]
         self.current_variable_mask = [0] * (num_of_variables - self.group_size_pool[self.current_group_index]) + [1] * self.group_size_pool[self.current_group_index]
         random.shuffle(self.current_variable_mask)
         #print(f"Current index: {self.current_group_index}, current size: {self.group_size_pool[self.current_group_index]}, current mask: {self.current_variable_mask}")
