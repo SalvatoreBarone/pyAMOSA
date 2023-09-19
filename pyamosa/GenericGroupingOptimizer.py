@@ -38,10 +38,8 @@ class GenericGroupingOptimizer(Optimizer):
         super().__init__(config)
         self.grouping_strategy = grouping_strategy
         self.pool_size = 0
-        self.groups_pool = []
-        self.groups_score = []
-        self.current_group_index = 0
-        self.current_variable_mask = []
+        self.variable_masks = []
+        self.current_mask_index = 0
 
     def initial_stage(self, problem, improve, remove_checkpoints):
         print("Initializing Variable Grouping")
@@ -80,7 +78,7 @@ class GenericGroupingOptimizer(Optimizer):
         pbar = tqdm(total = tot_iterations, desc = "Cooling the matter: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}")
         while not termination_criterion.check_termination(self):
             self.current_temperature *= self.config.cooling_factor
-            self.select_group(problem.num_of_variables)
+            self.select_group()
             self.annealing(problem, current_point)
             self.update_group_score()
             self.n_eval += self.config.annealing_iterations
@@ -94,18 +92,16 @@ class GenericGroupingOptimizer(Optimizer):
         print("Termination criterion has been met.")
 
     def init_variable_grouping(self):
-        if len(self.grouping_strategy.variable_groups) == 0:
-            self.grouping_strategy.run(self.config.cache_dir)
-        self.groups_pool = self.grouping_strategy.variable_groups
-        self.pool_size = len(self.groups_pool)
+        if len(self.grouping_strategy.variable_masks) == 0:
+            self.grouping_strategy.run()
+        self.variable_masks = self.grouping_strategy.variable_masks
+        self.pool_size = len(self.variable_masks)
         self.groups_score = np.ones(self.pool_size)
-        for i, g in enumerate(self.groups_pool):
-            print(f"Group {i} of size {len(g)}: {g}")
+        for i, g in enumerate(self.variable_masks):
+            print(f"Group {i} of size {np.sum(g)}: {g}")
 
-    def select_group(self, n_vars):
+    def select_group(self):
         self.current_group_index = random.choices(list(range(self.pool_size)), weights = Optimizer.softmax(7 * self.groups_score), k=1)[0]
-        self.current_variable_mask = tuple(1.0 if i in self.groups_pool[self.current_group_index] else 0.0 for i in range(n_vars) )
-        #print(f"Current index: {self.current_group_index}, current mask: {self.current_variable_mask}")
 
     def update_group_score(self):
         self.groups_score[self.current_group_index] = self.archive.C_actual_prev
@@ -115,7 +111,9 @@ class GenericGroupingOptimizer(Optimizer):
         safety_exit = problem.max_attempt
         while safety_exit >= 0 and problem.is_cached(z):
             safety_exit -= 1
-            selected_indexes = random.choices(list(range(problem.num_of_variables)), weights = self.current_variable_mask, k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            selected_indexes = random.choices(list(range(problem.num_of_variables)), weights = self.variable_masks[self.current_mask_index], k = random.randrange(1, 1 + min([strength, problem.num_of_variables])))
+            allowed_indexes = np.nonzero(self.variable_masks[self.current_mask_index])[0].tolist()
+            assert all(i in allowed_indexes for i in selected_indexes), f"One of the selected decision variables must not be altered.\nSelected indexes {selected_indexes}\nAllowed variables: {allowed_indexes}\n"
             for i in selected_indexes:
                 lb = problem.lower_bound[i]
                 ub = problem.upper_bound[i]

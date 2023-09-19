@@ -107,7 +107,7 @@ def runmop(problem, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, wi
 @cli.command('lsmop')
 @click.argument('problem', type = click.Choice(list(lsmop_problems.keys())), required = True)
 @click.argument('nvar', type = int, required = True)
-@click.argument('heuristic', type = click.Choice(["DRG", "DVG"]), required = True)
+@click.argument('heuristic', type = click.Choice(["DRG", "DVG2"]), required = True)
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
@@ -139,8 +139,8 @@ def runlsmop(problem, nvar, heuristic, hard, soft, gamma, climb, itemp, ftemp, c
     config.cache_dir = f".{problem}_{nvar}_cache"
     if heuristic == "DRG":
         optimizer = pyamosa.DynamicRandomGroupingOptimizer(config)
-    elif heuristic == "DVG":
-        optimizer = pyamosa.GenericGroupingOptimizer(config, pyamosa.DifferentialVariableGrouping(problem_instance))
+    elif heuristic == "DVG2":
+        optimizer = pyamosa.GenericGroupingOptimizer(config, pyamosa.DifferentialVariableGrouping2(problem_instance))
     if attempts != 0:
         problem_instance.max_attempt = attempts
     termination = pyamosa.CombinedStopCriterion(maxtime, ftemp, win)

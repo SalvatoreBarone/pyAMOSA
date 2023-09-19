@@ -19,7 +19,7 @@ from .Problem import Problem
 from .Config import Config
 from .Optimizer import Optimizer 
 from .VariableGrouping import VariableGrouping
-from .DifferentialVariableGrouping import DifferentialVariableGrouping
+from .DifferentialVariableGrouping2 import DifferentialVariableGrouping2
 from .DynamicRandomGroupingOptimizer import DynamicRandomGroupingOptimizer
 from .GenericGroupingOptimizer import GenericGroupingOptimizer
 from .StopCriterion import StopCriterion

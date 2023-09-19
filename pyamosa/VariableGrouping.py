@@ -23,23 +23,23 @@ class VariableGrouping:
     def __init__(self, problem : Problem, cache : str = "grouping_cache.json5"):
         self.problem = problem
         self.cache_file = cache
-        self.variable_groups = []
+        self.variable_masks = []
 
     def load(self):
         with open(self.cache_file) as file:
-            self.variable_groups = json5.load(file)
+            self.variable_masks = json5.load(file)
 
     def store(self):
         try:
             with open(self.cache_file, 'w') as outfile:
-                json5.dump(self.variable_groups, outfile)
+                json5.dump(self.variable_masks, outfile)
         except TypeError as e:
-            print(self.variable_groups)
+            print(self.variable_masks)
             print(e)
             exit()
 
     def min_step(self, dimension):
         return 1 if self.problem.types[dimension] == Type.INTEGER else (5 * np.finfo(float).eps)
 
-    def run(self, problem_cache : str, eps : float = 10 * np.finfo(float).eps):
+    def run(self):
         pass
