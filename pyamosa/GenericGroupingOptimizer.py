@@ -97,9 +97,7 @@ class GenericGroupingOptimizer(Optimizer):
         self.variable_masks = self.grouping_strategy.variable_masks
         self.pool_size = len(self.variable_masks)
         self.groups_score = np.ones(self.pool_size)
-        for i, g in enumerate(self.variable_masks):
-            print(f"Group {i} of size {np.sum(g)}: {g}")
-
+        
     def select_group(self):
         self.current_group_index = random.choices(list(range(self.pool_size)), weights = Optimizer.softmax(7 * self.groups_score), k=1)[0]
 

@@ -29,8 +29,8 @@ For further insights, please refer to
 
 """
 class DifferentialVariableGrouping2(VariableGrouping):
-    def __init__(self, problem : Problem, cache : str = "differential_grouping_cache.json5"):
-        super().__init__(problem, cache)
+    def __init__(self, problem : Problem):
+        super().__init__(problem)
         self.Lambda = np.zeros((problem.num_of_variables, problem.num_of_variables, problem.num_of_objectives))
         self.F = np.empty((problem.num_of_variables, problem.num_of_variables, problem.num_of_objectives))
         self.F.fill(np.nan)
@@ -78,17 +78,18 @@ class DifferentialVariableGrouping2(VariableGrouping):
                 delta_2 = self.F[i][j] - self.f[j]
                 self.Lambda[i][j] = np.absolute(delta_1 - delta_2)
 
-    def compute_dsm(self):
+    def compute_dsm(self, tso : VariableGrouping.TSObjective = VariableGrouping.TSObjective.Any):
+        aggregator = {VariableGrouping.TSObjective.Any : any, VariableGrouping.TSObjective.All : all}
         for i in trange(self.problem.num_of_variables,  desc = "Building Theta: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             for j in range(i + 1, self.problem.num_of_variables):
                 f_values = [self.x_1["f"], self.F[i][j], self.f[i], self.f[j]]
                 e_inf = self.gamma(2) * np.sum(np.absolute(f_values))
                 e_sup = self.gamma(np.sqrt(self.problem.num_of_variables)) * np.max(f_values)
-                if all(self.Lambda[i][j] > e_sup):
-                    self.Theta[i][j] = 1
+                if aggregator[tso](self.Lambda[i][j] > e_sup):
+                    self.Theta[i][j] = self.Theta[j][i] = 1
                     self.eta_1 += 1
-                elif all(self.Lambda[i][j] < e_inf):
-                    self.Theta[i][j] = 0
+                elif aggregator[tso](self.Lambda[i][j] < e_inf):
+                    self.Theta[i][j] = self.Theta[j][i] = 0
                     self.eta_0 += 1
         for i in trange(self.problem.num_of_variables,  desc = "Completing Theta: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             for j in range(i + 1, self.problem.num_of_variables):
@@ -97,21 +98,13 @@ class DifferentialVariableGrouping2(VariableGrouping):
                     e_inf = self.gamma(2) * np.sum(np.absolute(f_values))
                     e_sup = self.gamma(np.sqrt(self.problem.num_of_variables)) * np.max(f_values)
                     eps = (self.eta_0 * e_inf + self.eta_1 * e_sup) / (self.eta_1 + self.eta_0)
-                    self.Theta[i][j] = any(self.Lambda[i][j] > eps)
-        np.fill_diagonal(self.Theta, 1)
+                    self.Theta[i][j] = self.Theta[j][i] = aggregator[tso](self.Lambda[i][j] > eps)
+        np.fill_diagonal(self.Theta, 0)
         np.nan_to_num(self.Theta, copy=False, nan=0.0)
 
-    def compute_cc(self):
-        non_separable_variables = {}
-        separable_variables = np.zeros(self.problem.num_of_variables)
-        for i in range(self.problem.num_of_variables):
-            if np.nansum(self.Theta[i]) > 1:
-                non_separable_variables[i] = {"linked": np.nonzero(self.Theta[i])[0].tolist(), "mask" :self.Theta[i].tolist()}
-            elif all(i not in ns["linked"] for ns in non_separable_variables.values()):
-                separable_variables[i] = 1    
-        self.variable_masks = [ i["mask"] for i in non_separable_variables.values() ]
-        if np.sum(separable_variables) > 1:
-            self.variable_masks.append(separable_variables.tolist())
+    def compute_cc(self, tsv : VariableGrouping.TSVariable = VariableGrouping.TSVariable.Any):
+        selector = {VariableGrouping.TSVariable.Any : self.TSV_any, VariableGrouping.TSVariable.All : self.TSV_all}
+        selector[tsv](self.Theta)
         
     def print_theta(self):
         print("\nTheta")
@@ -119,8 +112,6 @@ class DifferentialVariableGrouping2(VariableGrouping):
             for j in range(self.problem.num_of_variables):
                 print("{:>10.2e}".format(self.Theta[i][j]), end = "\t")
             print("")
-        
-        print(f"\nn{np.nansum(self.Theta, axis = 1)}")
 
     def print_lambda(self):
         print("\nLambda")
@@ -131,16 +122,21 @@ class DifferentialVariableGrouping2(VariableGrouping):
                     print("{:>10.2e}".format(self.Lambda[i][j][k]), end = "\t")
                 print("")
 
-    def run(self):
+    def run(self, tso : VariableGrouping.TSObjective = VariableGrouping.TSObjective.Any, tsv : VariableGrouping.TSVariable = VariableGrouping.TSVariable.Any):
         self.reset()
         self.compute_ism()
-        self.compute_dsm()
-        self.compute_cc()
+        self.compute_dsm(tso)
+        #self.print_theta()
+        self.compute_cc(tsv)
+        #self.print_masks()
+        #exit()
+            
+        
 
     @staticmethod
     def gamma(k: float): # see Remark 1.2 of R. M. Corless and N. Fillion, "A Graduate Introduction to Numerical Methods". New York, NY, USA: Springer-Verlag, 2013.
         mu_m = np.finfo(float).eps
         return k * mu_m / (1 - k * mu_m)
-
+    
 
 

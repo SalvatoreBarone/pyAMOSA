@@ -29,7 +29,7 @@ setup(
     keywords="Multi Objective Optimization",
     packages=["pyamosa"],
     include_package_data=True,
-    install_requires=["numpy", "matplotlib", "click", "tqdm", "json5"],
+    install_requires=["numpy", "scipy", "networkx", "matplotlib", "click", "tqdm", "json5"],
     # setup_requires=["pytest-runner"],
     # tests_require=["pytest"],
     # entry_points={

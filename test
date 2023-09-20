@@ -15,7 +15,7 @@ You should have received a copy of the GNU General Public License along with
 RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
-import json5, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
+import os, json5, pyamosa, numpy as np, matplotlib.pyplot as plt, click, datetime
 from problems.BNH import *
 from problems.OSY import *
 from problems.TNK import *
@@ -108,6 +108,8 @@ def runmop(problem, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, wi
 @click.argument('problem', type = click.Choice(list(lsmop_problems.keys())), required = True)
 @click.argument('nvar', type = int, required = True)
 @click.argument('heuristic', type = click.Choice(["DRG", "DVG2"]), required = True)
+@click.argument('tso', type = click.Choice(["any", "all"]))
+@click.argument('tsv', type = click.Choice(["any", "all"]))
 @click.option('--hard', type = int, required = False, default = 100, help = 'Hard limit')
 @click.option('--soft', type = int, required = False, default = 200, help = 'Soft limit')
 @click.option('--gamma', type = int, required = False, default = 2, help = 'Gamma')
@@ -121,7 +123,9 @@ def runmop(problem, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, wi
 @click.option('--improve', type = str, required = False, default = None, help = 'Archive from previous run (JSON)')
 @click.option('--attempts', type=int, default = 0, help="Maximum random-perturbation attempts")
 @click.option('--maxtime', type = str, required = False, default = None, help = 'Max duration (hh:mm:ss)')
-def runlsmop(problem, nvar, heuristic, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, improve, attempts, maxtime):
+def runlsmop(problem, nvar, heuristic, tso, tsv, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, win, improve, attempts, maxtime):
+    tso_selector = {"all" : pyamosa.VariableGrouping.TSObjective.All, "any": pyamosa.VariableGrouping.TSObjective.Any}
+    tsv_selector = {"all" : pyamosa.VariableGrouping.TSVariable.All, "any" : pyamosa.VariableGrouping.TSVariable.Any}
     problem_instance = lsmop_problems[problem](nvar)
     config = pyamosa.Config
     config.archive_hard_limit = hard
@@ -140,7 +144,14 @@ def runlsmop(problem, nvar, heuristic, hard, soft, gamma, climb, itemp, ftemp, c
     if heuristic == "DRG":
         optimizer = pyamosa.DynamicRandomGroupingOptimizer(config)
     elif heuristic == "DVG2":
-        optimizer = pyamosa.GenericGroupingOptimizer(config, pyamosa.DifferentialVariableGrouping2(problem_instance))
+        variable_decomposition_cache = f"{heuristic}_{tso}_{tsv}.json5"
+        grouper = pyamosa.DifferentialVariableGrouping2(problem_instance)
+        if os.path.exists(variable_decomposition_cache):
+            grouper.load(variable_decomposition_cache)
+        else:
+            grouper.run(tso_selector[tso], tsv_selector[tsv])
+            grouper.store(variable_decomposition_cache)
+        optimizer = pyamosa.GenericGroupingOptimizer(config, grouper)
     if attempts != 0:
         problem_instance.max_attempt = attempts
     termination = pyamosa.CombinedStopCriterion(maxtime, ftemp, win)

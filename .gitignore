@@ -8,7 +8,6 @@ dist
 pyAMOSA.egg-info/
 virtualenv/
 venv/
-*_checkpoint.json
-*_checkpoint.json5
-*_final_archive.json5
+*.json
+*.json5
 .*_cache/
