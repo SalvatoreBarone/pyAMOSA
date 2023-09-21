@@ -126,12 +126,7 @@ class DifferentialVariableGrouping2(VariableGrouping):
         self.reset()
         self.compute_ism()
         self.compute_dsm(tso)
-        #self.print_theta()
         self.compute_cc(tsv)
-        #self.print_masks()
-        #exit()
-            
-        
 
     @staticmethod
     def gamma(k: float): # see Remark 1.2 of R. M. Corless and N. Fillion, "A Graduate Introduction to Numerical Methods". New York, NY, USA: Springer-Verlag, 2013.

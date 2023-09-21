@@ -89,10 +89,6 @@ class VariableGrouping:
         self.gen_masks(Theta, interacting_variables, separable_variables)
         
     def gen_masks(self, Theta, interacting_variables, separable_variables):
-        # print("Interacting variables:")
-        # for i in interacting_variables:
-        #     print(i)
-        # print(f"Separable variables: {separable_variables}")
         self.variable_masks = []
         for i in interacting_variables:
             mask = np.zeros((np.shape(Theta)[0],))
