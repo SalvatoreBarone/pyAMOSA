@@ -27,13 +27,14 @@ from problems.ZDT6 import *
 from problems.metrics import *
 from problems.GenZDT1 import *
 from problems.GenZDT2 import *
+from problems.GenZDT3 import *
 from problems.GenZDT4 import *
 from problems.GenZDT6 import *
 
 
 
 mop_problems = {"BNH": BNH(), "OSY": OSY(), "TNK": TNK(), "ZDT1": ZDT1(), "ZDT2": ZDT2(), "ZDT3": ZDT3(), "ZDT4": ZDT4(), "ZDT6": ZDT6()}
-lsmop_problems = {"ZDT1": GenZDT1, "ZDT2": GenZDT2, "ZDT4": GenZDT4, "ZDT6": GenZDT6}
+lsmop_problems = {"ZDT1": GenZDT1, "ZDT2": GenZDT2, "ZDT3" : GenZDT3, "ZDT4": GenZDT4, "ZDT6": GenZDT6}
 
 @click.group()
 def cli():
