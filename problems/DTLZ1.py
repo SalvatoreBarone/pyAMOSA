@@ -34,15 +34,16 @@ For further details, please refer to
     https://doi.org/10.3929/ETHZ-A-004287264.
 
 """
-class DTZ1(pyamosa.Problem):
+class DTLZ1(pyamosa.Problem):
 
-    def __init__(self, n_vars, n_objs):
+    def __init__(self, n_vars, n_objs = 2):
         self.k = n_vars - n_objs + 1
         pyamosa.Problem.__init__(self, n_vars, [pyamosa.Type.REAL] * n_vars, [0.0] * n_vars, [1.0] * n_vars, n_objs, 0)
 
     def evaluate(self, x, out):
+        x_m = np.array(x[self.num_of_objectives-1:])
         f = np.zeros((self.num_of_objectives,))
-        g = 100 * ( self.k + np.sum( np.square(x[self.num_of_objectives-1:] - 0.5) - np.cos(20 * np.pi * (x[self.num_of_objectives-1:] - 0.5)) ) )
+        g = 100 * ( self.k + np.sum( np.square(x_m - 0.5) - np.cos(20 * np.pi * (x_m - 0.5)) ) )
         f[0] = 0.5 * (1 + g) * np.prod(x[:self.num_of_objectives-2])
         for m in range(1, self.num_of_objectives-1):
             f[m] = 0.5 * (1 + g) * (1 - x[self.num_of_objectives-m]) * np.prod(x[:self.num_of_objectives-m-1])

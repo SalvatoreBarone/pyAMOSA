@@ -34,19 +34,19 @@ For further details, please refer to
 
 """
 
-class DTZ2(pyamosa.Problem):
+class DTLZ2(pyamosa.Problem):
 
-    def __init__(self, n_vars, n_objs):
+    def __init__(self, n_vars, n_objs = 2):
         self.k = n_vars - n_objs + 1
         pyamosa.Problem.__init__(self, n_vars, [pyamosa.Type.REAL] * n_vars, [0.0] * n_vars, [1.0] * n_vars, n_objs, 0)
 
     def evaluate(self, x, out):
         f = np.zeros((self.num_of_objectives,))
-        g = np.sum( np.square(x[self.num_of_objectives-1:] - 0.5) )
-        f[0] = 0.5 * (1 + g) * np.prod( np.cos(np.pi * 0.5* x[:self.num_of_objectives-2]))
+        g = np.sum( np.square(np.add(x[self.num_of_objectives-1:], -0.5)) )
+        f[0] = 0.5 * (1 + g) * np.prod( np.cos(np.multiply(np.pi * 0.5,  x[:self.num_of_objectives-2])))
 
         for m in range(1, self.num_of_objectives-1):
-            f[m] = (1 + g) * np.sin(np.pi * 0.5 * x[self.num_of_objectives-m]) * np.prod( np.cos(np.pi * 0.5 * x[:self.num_of_objectives-m-1]))
+            f[m] = (1 + g) * np.sin(np.multiply(np.pi * 0.5, x[self.num_of_objectives-m])) * np.prod(np.cos(np.multiply(np.pi * 0.5, x[:self.num_of_objectives-m-1])))
 
         f[self.num_of_objectives-1] = (1 + g) * np.sin(np.pi * 0.5 * x[0])
         out["f"] = f.tolist()
