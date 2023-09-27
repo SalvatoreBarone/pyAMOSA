@@ -16,6 +16,7 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 import copy, numpy as np
 from tqdm import trange
+from .DataType import Type
 from .Problem import Problem
 from .VariableGrouping import VariableGrouping
 
@@ -37,7 +38,7 @@ class DifferentialVariableGrouping2(VariableGrouping):
         self.f = np.empty((problem.num_of_variables, problem.num_of_objectives))
         self.f.fill(np.nan)
         self.x_1 = self.problem.lower_point()
-        self.m = (np.array(self.problem.upper_bound) + np.array(self.problem.lower_bound)) / 2
+        self.m = [ (u + l) / 2 if t == Type.REAL else (u + l) // 2 for u, l, t in zip(problem.upper_bound, problem.lower_bound, problem.types) ]
         self.Theta = np.empty((problem.num_of_variables, problem.num_of_variables))
         self.Theta.fill(np.nan)
         self.eta_0 = 0
