@@ -51,7 +51,7 @@ class DifferentialVariableGrouping2(VariableGrouping):
         self.f = np.empty((self.problem.num_of_variables, self.problem.num_of_objectives))
         self.f.fill(np.nan)
         self.x_1 = self.problem.lower_point()
-        self.m = (np.array(self.problem.upper_bound) + np.array(self.problem.lower_bound)) / 2
+        self.m = [ (u + l) / 2 if t == Type.REAL else (u + l) // 2 for u, l, t in zip(self.problem.upper_bound, self.problem.lower_bound, self.problem.types) ]
         self.Theta = np.empty((self.problem.num_of_variables, self.problem.num_of_variables))
         self.Theta.fill(np.nan)
         self.eta_0 = 0
