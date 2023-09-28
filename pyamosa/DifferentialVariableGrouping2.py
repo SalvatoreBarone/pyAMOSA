@@ -58,13 +58,13 @@ class DifferentialVariableGrouping2(VariableGrouping):
         self.eta_1 = 0
 
     def compute_ism(self):
-        for i in trange(self.problem.num_of_variables,  desc = "Building Lambda: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
+        for i in trange(self.problem.num_of_variables, desc = "Building Lambda: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             if all(np.isnan(self.f[i])):
                 x_2 = copy.deepcopy(self.x_1)
                 x_2["x"][i] = self.m[i]
                 self.problem.get_objectives(x_2)
                 self.f[i] = x_2["f"]
-            for j in range(i + 1, self.problem.num_of_variables):
+            for j in trange(i + 1, self.problem.num_of_variables, desc = f"Interdipendences of x_{i}: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
                 if all(np.isnan(self.f[j])):
                     x_3 = copy.deepcopy(self.x_1) 
                     x_3["x"][j] = self.m[j]
