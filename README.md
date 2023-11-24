@@ -13,7 +13,7 @@ If you want to install it manually, you can do it by simply running the provided
 $ python3 setup.py install
 ```
 
-## Defining and solving a problem
+# Defining and solving a problem
 
 In pyAMOSA a problem is defined by an object that contains some metadata, for instance the number of decision variables, 
 their data type, the number of objectives, the number of constraints, lower and upper bounds for decision variables.
@@ -197,18 +197,21 @@ When calling the ```run()``` method, you can specify the path of a JSON file con
 previous run. Solutions from this archive will be considered as a starting point for a new run of the heuristic, 
 possibly resulting in even better solutions.
 
-## A note on processing-based multitasking
+# Understanding the log prints
+When calling the ```run()``` method, during the annealing procedure, the optimizers will print several statistical information in a table format.
+These are pretty useful for evaluating the effectiveness of the optimization process -- in specific whether it's going toward either convergence or diversity in the population, etc. -- so it's worth discoursing them.
 
-The multitasking approach adopted in this implementation of the AMOSA algorithm is called *synchronous with intensive
-solution exchanges*: threads starts from a random initial solution and they run independently, for a number of 
-refinement iterations  being equal to the maximum number of annealing iterations, as specified by the related
-configuration parameter. Once they have finished, before decreasing the temperature, threads report their final archive, 
-and a reduce operation to obtain the non-dominated solutions is performed.
+  - *temp*.: it is the current temperature of the matter; refer to [1] for further details on its impact on the optimization process;
+  - *eval*: it is the number of fitness-function evaluations;
+  - *nds*: it is the number of non-dominated solutions the algorithm found until then;
+  - *feas*: it is the number of **feasible** non-dominated solutions (i.e., those satisfying constraints) the algorithm found until then;
+  - *cv min* and *cv avg*: minimum and average constraint violation, computed on unfeasible non-dominated solutions the algorithm found until then;
+  - *D\** and *Dnad*: movement of the *ideal* and *nadir* idealized extreme points in the object-space; whether the algotithm is going toward convergence, they tend to be higher (the Pareto front is moving a lot!); see [3] for further details;
+  - *phi*: the *intergenerational distance index*, computed on candidate solutions from the previous annealing iteration *P'* and candidate solutions resulting from the very last annealing iteration *P*; this allows monitoring; if the Pareto front is stationary, and can be improved neither by convergence nor by diversity, this value is close to zero; this metric is taken into consideration to determine the early termination condition; see [3] for further details;
+  - *C(P', P)* and *C(P, P')*: the *coverage index* as defined in [4], computed on candidate solutions from the previous annealing iteration *P'* and candidate solutions resulting from the very last annealing iteration *P* and vice-versa, respectively; in general, *C(A,B)* is percentage the solutions in *B* that are dominated by at least one solution in *A*, where *A* and *B* are two Pareto fronts; therefore, *C(P, P')* should be alway greater than *C(P', P)* through the optimization process.
 
-Nevertheless, in case your fitness-functions are already using multitasking, you can disable the latter in AMOSA by
-simply setting ```config.multiprocess_enabled = False```.
-
-## References
+# References
 1. Bandyopadhyay, S., Saha, S., Maulik, U., & Deb, K. (2008). A simulated annealing-based multiobjective optimization algorithm: AMOSA. IEEE transactions on evolutionary computation, 12(3), 269-283.
 2. Deb, K. (2001). Multiobjective Optimization Using Evolutionary Algorithms. New York: Wiley, 2001
 3. Blank, Julian, and Kalyanmoy Deb. "A running performance metric and termination criterion for evaluating evolutionary multi-and many-objective optimization algorithms." 2020 IEEE Congress on Evolutionary Computation (CEC). IEEE, 2020.
+4. Zitzler, E., e L. Thiele. "Multiobjective evolutionary algorithms: a comparative case study and the strength Pareto approach". IEEE Transactions on Evolutionary Computation 3, fasc. 4 (novembre 1999).

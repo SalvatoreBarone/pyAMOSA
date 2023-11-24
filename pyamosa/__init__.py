@@ -18,6 +18,10 @@ from .DataType import Type
 from .Problem import Problem
 from .Config import Config
 from .Optimizer import Optimizer 
+from .VariableGrouping import VariableGrouping
+from .DifferentialVariableGrouping2 import DifferentialVariableGrouping2
+from .DynamicRandomGroupingOptimizer import DynamicRandomGroupingOptimizer
+from .GenericGroupingOptimizer import GenericGroupingOptimizer
 from .StopCriterion import StopCriterion
 from .StopMaxTime import StopMaxTime
 from .StopMinTemperature import StopMinTemperature
@@ -25,6 +29,6 @@ from .StopPhyWindow import StopPhyWindow
 from .CombinedStopCriterion import CombinedStopCriterion
 
 name = "pyamosa"
-__version__ = "1.3.7.5"
+__version__ = "2.0.2"
 __author__ = "Salvatore Barone"
 __credits__ = "Department of Electrical Engineering and Information Technologies, University of Naples Federico II, Via Claudio 21, Naples, Italy"

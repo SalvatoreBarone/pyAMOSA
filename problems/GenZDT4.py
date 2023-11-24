@@ -17,16 +17,15 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import pyamosa, numpy as np
 
 
-class ZDT6(pyamosa.Problem):
-    n_var = 10
-
-    def __init__(self):
-        pyamosa.Problem.__init__(self, ZDT6.n_var, [pyamosa.Type.REAL] * ZDT6.n_var, [0.0] * ZDT6.n_var, [1.0] * ZDT6.n_var, 2, 0)
+class GenZDT4(pyamosa.Problem):
+    
+    def __init__(self, n_var : int = 10):
+        pyamosa.Problem.__init__(self, n_var, [pyamosa.Type.REAL] * n_var, [0.0] + [-10.0] * (n_var - 1), [1.0] + [10.0] * (n_var - 1), 2, 0)
 
     def evaluate(self, x, out):
-        f = 1 - np.exp(-4 * x[0]) * np.power(np.sin(6 * np.pi * x[0]), 6)
-        g = 1 + 9 * np.power(sum(x[1:]) / 9, 1./4)
-        h = 1 - (f / g) ** 2
+        f = x[0]
+        g = 1 + 10 * 9 + sum(i**2 - 10 * np.cos(4 * np.pi * i) for i in x[1:])
+        h = 1 - np.sqrt(f / g)
         out["f"] = [f, g * h ]
 
     def optimums(self):
@@ -36,7 +35,7 @@ class ZDT6(pyamosa.Problem):
         """
         pareto_set = np.linspace(0, 1, 100)
         out =   [
-                    {   "x": [x] + [0] * (ZDT6.n_var-1),
+                    {   "x": [x] + [0] * (self.n_var-1),
                         "f": [0] * self.num_of_objectives,
                         "g": [0] * self.num_of_constraints if self.num_of_constraints > 0 else None
                     } for x in pareto_set
@@ -44,6 +43,3 @@ class ZDT6(pyamosa.Problem):
         for o in out:
             self.evaluate(o["x"], o)
         return out
-
-
-

@@ -32,7 +32,6 @@ class MultiFileCacheHandle:
                     with open(f"{self.directory}/{f}") as j:
                         tmp = json5.load(j)
                         cache = {**cache, **tmp}
-        print(f"{len(cache)} cache entries loaded from {self.directory}")
         return cache
 
     def write(self, cache : list):
