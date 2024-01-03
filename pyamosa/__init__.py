@@ -15,6 +15,7 @@ RMEncoder; if not, write to the Free Software Foundation, Inc., 51 Franklin
 Street, Fifth Floor, Boston, MA 02110-1301, USA.
 """
 from .DataType import Type
+from .Pareto import Pareto
 from .Problem import Problem
 from .Config import Config
 from .Optimizer import Optimizer 
@@ -29,6 +30,6 @@ from .StopPhyWindow import StopPhyWindow
 from .CombinedStopCriterion import CombinedStopCriterion
 
 name = "pyamosa"
-__version__ = "2.0.3"
+__version__ = "2.0.4"
 __author__ = "Salvatore Barone"
 __credits__ = "Department of Electrical Engineering and Information Technologies, University of Naples Federico II, Via Claudio 21, Naples, Italy"
