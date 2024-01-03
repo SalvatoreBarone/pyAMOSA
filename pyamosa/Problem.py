@@ -17,7 +17,6 @@ Street, Fifth Floor, Boston, MA 02110-1301, USA.
 import numpy as np, random
 from .MultiFileCacheHandle import MultiFileCacheHandle
 from .DataType import Type
-from .Pareto import Pareto
 
 class Problem:
     
@@ -98,7 +97,7 @@ class Problem:
         handler = MultiFileCacheHandle(directory)
         handler.write(self.cache)
 
-    def archive_to_cache(self, archive : Pareto):
+    def archive_to_cache(self, archive):
         for s in archive.candidate_solutions:
             if not self.is_cached(s):
                 self.add_to_cache(s)

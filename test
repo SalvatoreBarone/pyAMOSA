@@ -106,7 +106,7 @@ def runmop(problem, hard, soft, gamma, climb, itemp, ftemp, cool, iter, strg, wi
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem_instance.cache_hits} over {problem_instance.total_calls}")
     optimizer.archive.write_json(f"{problem}_final_archive.json5")
-    optimizer.archive.plot_front(problem_instance.num_of_objectives, f"{problem}_pareto_front.pdf")
+    optimizer.archive.plot_front(problem_instance, f"{problem}_pareto_front.pdf")
 
 @cli.command('lsmop')
 @click.argument('problem', type = click.Choice(list(lsmop_problems.keys())), required = True)
@@ -164,7 +164,7 @@ def runlsmop(problem, nvar, heuristic, tso, tsv, hard, soft, gamma, climb, itemp
     print(f"Elapsed time: {str(datetime.timedelta(seconds=optimizer.duration))}")
     print(f"Cache hits:{problem_instance.cache_hits} over {problem_instance.total_calls}")
     optimizer.archive.write_json(f"{problem}_{nvar}_{heuristic}_final_archive.json5")
-    optimizer.archive.plot_front(problem_instance.num_of_objectives, f"{problem}_{nvar}_{heuristic}_pareto_front.pdf")
+    optimizer.archive.plot_front(problem_instance, f"{problem}_{nvar}_{heuristic}_pareto_front.pdf")
 
 @cli.command('lsmopeval')
 @click.argument('prob', type = click.Choice(list(mop_problems.keys())), required = True)

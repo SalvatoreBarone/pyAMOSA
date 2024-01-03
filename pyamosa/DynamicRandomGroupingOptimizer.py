@@ -58,7 +58,7 @@ class DynamicRandomGroupingOptimizer(Optimizer):
             self.n_eval += self.config.annealing_iterations
             self.print_statistics(problem.num_of_constraints)
             if self.archive.size() > self.config.archive_soft_limit:
-                self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
+                self.archive.clustering(problem, self.config.archive_hard_limit, self.config.clustering_max_iterations)
                 self.print_statistics(problem.num_of_constraints)
             self.save_checkpoint()
             problem.store_cache(self.config.cache_dir)

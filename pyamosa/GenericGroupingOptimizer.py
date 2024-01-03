@@ -52,7 +52,7 @@ class GenericGroupingOptimizer(Optimizer):
             problem.archive_to_cache(self.archive)
         elif improve is not None:
             print(f"Reading {improve}, and trying to improve a previous run...")
-            self.archive.read_json(problem.types, improve)
+            self.archive.read_json(problem, improve)
             problem.archive_to_cache(self.archive)
             self.run_hill_climbing(climber, problem)
         elif os.path.exists(self.config.hill_climb_checkpoint_file):
@@ -84,7 +84,7 @@ class GenericGroupingOptimizer(Optimizer):
             self.n_eval += self.config.annealing_iterations
             self.print_statistics(problem.num_of_constraints)
             if self.archive.size() > self.config.archive_soft_limit:
-                self.archive.clustering(problem.num_of_constraints, self.config.archive_hard_limit, self.config.clustering_max_iterations)
+                self.archive.clustering(problem, self.config.archive_hard_limit, self.config.clustering_max_iterations)
                 self.print_statistics(problem.num_of_constraints)
             self.save_checkpoint()
             problem.store_cache(self.config.cache_dir)

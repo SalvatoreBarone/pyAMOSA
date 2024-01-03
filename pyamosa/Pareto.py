@@ -18,7 +18,7 @@ from __future__ import annotations
 import numpy as np, matplotlib.pyplot as plt, json5, sys, os, random
 from tqdm import tqdm, trange
 from .DataType import Type
-
+from .Problem import Problem
 class Pareto:
     def __init__(self) -> None:
         self.candidate_solutions = []
@@ -128,10 +128,10 @@ class Pareto:
             print(e)
             exit()
             
-    def read_json(self, types, json_file : str):
+    def read_json(self, problem : Problem, json_file : str):
         with open(json_file) as f:
             archive = json5.load(f)
-        self.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], types)], "f": a["f"], "g": a["g"]} for a in archive]
+        self.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in archive]
         
     def get_checkpoint(self):
         return {
@@ -141,21 +141,21 @@ class Pareto:
             "phy": self.phy,
             "arc": self.candidate_solutions}
     
-    def from_checkpoint(self, checkpoint, types):
+    def from_checkpoint(self, checkpoint, problem : Problem):
         self.ideal = [float(i) for i in checkpoint["ideal"]] if checkpoint["ideal"] != "None" else None
         self.nadir = [float(i) for i in checkpoint["nadir"]] if checkpoint["nadir"] != "None" else None
         self.old_norm_objectives = np.array(checkpoint["norm"])
         self.phy = [float(i) for i in checkpoint["phy"]]
-        self.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]   
+        self.candidate_solutions = [{"x": [int(i) if j == Type.INTEGER else float(i) for i, j in zip(a["x"], problem.types)], "f": a["f"], "g": a["g"]} for a in checkpoint["arc"]]   
         
-    def export_csv(self, num_of_objectives, num_of_variables, csv_file : str, fitness_labels : list = None):
+    def export_csv(self, problem : Problem, csv_file : str, fitness_labels : list = None):
         original_stdout = sys.stdout
-        row_format = "{:};" + "{:};" * num_of_objectives + "{:};" * num_of_variables
+        row_format = "{:};" + "{:};" * problem.num_of_objectives + "{:};" * problem.num_of_variables
         if fitness_labels is None:
-            fitness_labels = [f"f{i}" for i in range(num_of_objectives)]	
+            fitness_labels = [f"f{i}" for i in range(problem.num_of_objectives)]	
         with open(csv_file, "w") as file:
             sys.stdout = file
-            print(row_format.format("", *fitness_labels, *[f"x{i}" for i in range(num_of_variables)]))
+            print(row_format.format("", *fitness_labels, *[f"x{i}" for i in range(problem.num_of_variables)]))
             for i, f, x in zip(range(len(self.pareto_front())), self.pareto_front(), self.pareto_set()):
                 print(row_format.format(i, *f, *x))
         sys.stdout = original_stdout
@@ -181,8 +181,8 @@ class Pareto:
             for x in pareto:
                 self.add(x)
                 
-    def clustering(self, num_of_constraints, max_points, max_iterations):
-        if num_of_constraints == 0:
+    def clustering(self, problem : Problem, max_points, max_iterations):
+        if problem.num_of_constraints == 0:
             self.candidate_solutions = Pareto.kmeans_clustering(self.candidate_solutions, max_points, max_iterations)
         else:
             feasible = [s for s in self.candidate_solutions if all(g <= 0 for g in s["g"])]
@@ -194,8 +194,8 @@ class Pareto:
             else:
                 self.candidate_solutions = feasible
     
-    def remove_infeasible(self, num_of_constraints):
-        if num_of_constraints > 0:
+    def remove_infeasible(self, problem : Problem):
+        if problem.num_of_constraints > 0:
             self.candidate_solutions = [s for s in self.candidate_solutions if all(g <= 0 for g in s["g"])]
         
     def remove_dominated(self):
@@ -252,7 +252,7 @@ class Pareto:
             self.phy.append(0)
             return (0, 0, 0, 0, 0)
     
-    def plot_front(self, num_of_objectives : int, pdf_file : str, fig_title : str = "Pareto front", axis_labels : list = None, color = "k", marker = "."):
+    def plot_front(self, problem : Problem, pdf_file : str, fig_title : str = "Pareto front", axis_labels : list = None, color = "k", marker = "."):
         def draw_proj(axis, data_x, data_y, data_z, color, ranges = [0.1, 0.1, 0.1]):
             xlim = axis.get_xlim()
             ylim = axis.get_ylim()
@@ -268,16 +268,16 @@ class Pareto:
             axis.set_ylim(ylim)
             axis.set_zlim(zlim)
         if axis_labels is None:
-            axis_labels = [f"f{str(i)}" for i in range(num_of_objectives)]
+            axis_labels = [f"f{str(i)}" for i in range(problem.num_of_objectives)]
         F = self.get_front()
-        if num_of_objectives == 2:
+        if problem.num_of_objectives == 2:
             plt.figure(figsize = (10, 10), dpi = 300)
             plt.plot(F[:, 0], F[:, 1], f'{color}{marker}')
             plt.xlabel(axis_labels[0])
             plt.ylabel(axis_labels[1])
             plt.title(fig_title)
             plt.savefig(pdf_file, bbox_inches = 'tight', pad_inches = 0)
-        elif num_of_objectives == 3:
+        elif problem.num_of_objectives == 3:
             fig = plt.figure()
             ax = fig.add_subplot(projection = '3d')
             ax.scatter(F[:, 0], F[:, 1], F[:, 2], marker = marker, color = color, depthshade = False)
