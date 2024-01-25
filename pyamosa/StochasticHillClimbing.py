@@ -41,7 +41,7 @@ class StochasticHillClimbing:
         for _ in trange(max_iterations, desc = "Hill climbing: ", leave = False, bar_format="{desc:30} {percentage:3.0f}% |{bar:40}{r_bar}{bar:-10b}"):
             new_candidate = copy.deepcopy(candidate)
             new_candidate["x"][direction] =  StochasticHillClimbing.clip(new_candidate["x"][direction] + (step_size * heading), self.problem.lower_bound[direction], self.problem.upper_bound[direction] - self.min_step(direction))
-            assert self.problem.lower_bound[direction] <= new_candidate["x"][direction] < self.problem.upper_bound[direction], f"Variable {direction} with value {new_candidate['x'][direction]} is out of bound for [{self.problem.lower_bound[direction]}, {self.problem.upper_bound[direction]}]"
+            assert self.problem.lower_bound[direction] <= new_candidate["x"][direction] <= self.problem.upper_bound[direction], f"Variable {direction} with value {new_candidate['x'][direction]} is out of bound for [{self.problem.lower_bound[direction]}, {self.problem.upper_bound[direction]}]"
             self.problem.get_objectives(new_candidate)
             if Pareto.dominates(new_candidate, candidate) or (not Pareto.dominates(new_candidate, candidate) and not Pareto.dominates(candidate, new_candidate) and Pareto.not_the_same(candidate, new_candidate)):
                 candidate = new_candidate
@@ -56,6 +56,8 @@ class StochasticHillClimbing:
     
     def stochastic_steep(self):
         direction = random.randrange(0, self.problem.num_of_variables)
+        while self.problem.lower_bound[direction] == self.problem.upper_bound[direction]:
+            direction = random.randrange(0, self.problem.num_of_variables)
         heading = 1 if random.random() > 0.5 else -1
         return direction, heading
     
