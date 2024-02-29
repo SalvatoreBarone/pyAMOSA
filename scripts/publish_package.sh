@@ -1,6 +1,6 @@
 #!/bin/bash
 source venv/bin/activate
 rm -rf build dist pyAMOSA.egg-info
-python setup.py check
-python setup.py sdist
-python -m twine upload dist/*
+python3 setup.py check
+python3 setup.py sdist
+python3 -m twine upload dist/*
