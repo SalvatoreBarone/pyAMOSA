@@ -28,7 +28,7 @@ class MultiFileCacheHandle:
         cache = {}
         if os.path.isdir(self.directory):
             for f in os.listdir(self.directory):
-                if f.endswith('.json5'):
+                if f.endswith('.json5') or f.endswith('.json'):
                     with open(f"{self.directory}/{f}") as j:
                         tmp = json5.load(j)
                         cache = {**cache, **tmp}
